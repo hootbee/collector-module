@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+*.log
+npm-debug.log*
+.DS_Store
+__pycache__/
+*.pyc
+
+storage/uploads/
+storage/tmp/
+
+*.tsbuildinfo
