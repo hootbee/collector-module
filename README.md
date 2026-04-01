@@ -73,3 +73,10 @@ and prints a short JSON summary.
 - Uploaded CSV files are stored under `backend/storage/uploads`.
 - Discovery is implemented as a background in-memory job with polling.
 - External discovery is currently backed by replaceable catalog connectors, not an LLM.
+
+## Docs
+
+- `backend/docs/README.md`
+- `backend/docs/api-reference.md`
+- `backend/docs/pipeline-flow.md`
+- `backend/docs/local-llm.md`
