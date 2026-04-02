@@ -9,11 +9,15 @@ import type {
   RecommendedDomain,
 } from '../common/contracts';
 import { stableHash, tokenize, uniqueKeepOrder } from '../common/text';
+import { OpenAiRecommendationService } from '../llm/openai-recommendation.service';
 import { ProfilingService } from '../profiling/profiling.service';
 
 @Injectable()
 export class DomainRecommendationService {
-  constructor(private readonly profilingService: ProfilingService) {}
+  constructor(
+    private readonly profilingService: ProfilingService,
+    private readonly openAiRecommendationService: OpenAiRecommendationService,
+  ) {}
 
   buildDatasetSummary(dataset: DatasetRecord, metadataColumns: string[]): DomainDatasetSummary {
     const features = this.featureColumns(dataset, metadataColumns);
@@ -29,7 +33,27 @@ export class DomainRecommendationService {
     };
   }
 
-  recommendDataset(input: {
+  async recommendDataset(input: {
+    dataset: DatasetRecord;
+    metadataColumns?: string[];
+    refreshSeed?: number;
+  }): Promise<DomainRecommendationResponse> {
+    const metadataColumns = input.metadataColumns ?? [];
+    const ruleBasedRecommendation = this.recommendDatasetRuleBased(input);
+    const analysis = input.dataset.analysis ?? this.profilingService.analyzeDataset(input.dataset);
+
+    const openAiRecommendation = await this.openAiRecommendationService.generateRecommendation({
+      dataset: input.dataset,
+      analysis,
+      metadataColumns,
+      datasetSummary: ruleBasedRecommendation.datasetSummary,
+      deterministicFeatureColumns: this.featureColumns(input.dataset, metadataColumns),
+    });
+
+    return openAiRecommendation ?? ruleBasedRecommendation;
+  }
+
+  recommendDatasetRuleBased(input: {
     dataset: DatasetRecord;
     metadataColumns?: string[];
     refreshSeed?: number;
@@ -175,7 +199,8 @@ export class DomainRecommendationService {
     selectedDomains: string[];
   }): DiscoveryContext {
     const recommendation =
-      input.dataset.recommendation ?? this.recommendDataset({ dataset: input.dataset, metadataColumns: input.metadataColumns });
+      input.dataset.recommendation ??
+      this.recommendDatasetRuleBased({ dataset: input.dataset, metadataColumns: input.metadataColumns });
 
     return {
       dataset: input.dataset,

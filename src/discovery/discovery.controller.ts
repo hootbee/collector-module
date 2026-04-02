@@ -6,7 +6,7 @@ export class DiscoveryController {
   constructor(private readonly discoveryService: DiscoveryService) {}
 
   @Post('jobs')
-  createJob(
+  async createJob(
     @Body()
     body: {
       datasetId?: string;

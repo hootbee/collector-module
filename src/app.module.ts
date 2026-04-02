@@ -6,6 +6,7 @@ import { DiscoveryController } from './discovery/discovery.controller';
 import { DiscoveryService } from './discovery/discovery.service';
 import { DomainRecommendationController } from './domain-recommendation/domain-recommendation.controller';
 import { DomainRecommendationService } from './domain-recommendation/domain-recommendation.service';
+import { OpenAiRecommendationService } from './llm/openai-recommendation.service';
 import { ProfilingService } from './profiling/profiling.service';
 import { SessionsController } from './sessions/sessions.controller';
 import { StoreService } from './store/store.service';
@@ -22,6 +23,7 @@ import { StoreService } from './store/store.service';
     StoreService,
     ProfilingService,
     DomainRecommendationService,
+    OpenAiRecommendationService,
     CatalogConnectorsService,
     DiscoveryService,
   ],

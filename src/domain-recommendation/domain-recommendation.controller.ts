@@ -18,7 +18,7 @@ export class DomainRecommendationController {
   ) {}
 
   @Post('recommend')
-  recommendDomains(
+  async recommendDomains(
     @Body()
     body: {
       datasetId?: string;
@@ -51,7 +51,7 @@ export class DomainRecommendationController {
       this.storeService.setDatasetAnalysis(dataset.id, this.profilingService.analyzeDataset(dataset));
     }
 
-    const recommendation = this.recommendationService.recommendDataset({
+    const recommendation = await this.recommendationService.recommendDataset({
       dataset,
       metadataColumns: body.metadataColumns ?? [],
       refreshSeed: body.refreshSeed,

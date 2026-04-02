@@ -12,6 +12,15 @@
 
 현재 구현은 전부 규칙 기반 대체 로직이다.
 
+추가로 현재 서버는 선택적 LLM provider를 붙일 수 있도록 확장되었다.
+
+즉 현재 선택지는 아래 두 가지다.
+
+```text
+1. 로컬 LLM 없음 -> 규칙 기반 추천
+2. OpenAI 또는 OpenAI-compatible/vLLM provider 사용 -> LLM 추천 + 실패 시 규칙 기반 fallback
+```
+
 ## 로컬 LLM을 사용하지 않는 영역
 
 아래 단계는 원칙적으로 로컬 LLM 없이 가는 것이 맞다.
@@ -66,6 +75,12 @@ backend/src/domain-recommendation/domain-recommendation.service.ts
 을 담당한다.
 
 로컬 LLM을 붙일 경우, 가장 먼저 바뀌는 영역은 이 서비스다.
+
+현재 LLM provider를 붙인 구현은 아래 파일에 들어 있다.
+
+```text
+backend/src/llm/openai-recommendation.service.ts
+```
 
 ## 추천되는 연결 방식
 
@@ -136,7 +151,7 @@ generatedQueries
 
 ```text
 규칙 기반으로 전체 파이프라인 동작 보장
--> 이후 로컬 LLM 준비되면 recommendation layer만 교체
+-> 이후 로컬 LLM 또는 OpenAI 준비되면 recommendation layer만 교체/확장
 ```
 
 전략으로 가는 것이 맞다.

@@ -17,9 +17,9 @@ Not included:
 - validation/model benchmarking
 - local LLM dependency
 
-The current implementation assumes no local LLM is available. Domain recommendation,
-keyword expansion, and discovery query generation are all rule-based so the API can run
-immediately from the terminal.
+The current implementation assumes no local LLM is required. Domain recommendation,
+keyword expansion, and discovery query generation can run rule-based immediately from the
+terminal, and an optional OpenAI or OpenAI-compatible/vLLM provider can be attached later.
 
 ## Install
 
@@ -80,3 +80,29 @@ and prints a short JSON summary.
 - `backend/docs/api-reference.md`
 - `backend/docs/pipeline-flow.md`
 - `backend/docs/local-llm.md`
+- `backend/docs/openai-provider.md`
+- `backend/.env.example`
+
+## LLM Provider
+
+Optional LLM-backed recommendation is supported.
+
+OpenAI example:
+
+```bash
+export LLM_PROVIDER=openai
+export OPENAI_API_KEY=your_api_key
+export OPENAI_MODEL=gpt-5-mini
+```
+
+OpenAI-compatible / vLLM example:
+
+```bash
+export LLM_PROVIDER=openai-compatible
+export LLM_BASE_URL=http://210.117.143.180:12020
+export LLM_MODEL=openai/gpt-oss-120b
+export LLM_API_MODE=chat_completions
+```
+
+If the provider is unavailable or returns an invalid payload, the server falls back to
+the existing rule-based recommendation flow.

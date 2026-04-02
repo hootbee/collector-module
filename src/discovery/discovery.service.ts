@@ -20,11 +20,11 @@ export class DiscoveryService {
     private readonly connectorsService: CatalogConnectorsService,
   ) {}
 
-  createJob(input: {
+  async createJob(input: {
     datasetId: string;
     metadataColumns: string[];
     selectedDomains: string[];
-  }): DiscoveryJobStatusResponse {
+  }): Promise<DiscoveryJobStatusResponse> {
     const dataset = this.storeService.getDataset(input.datasetId);
     if (!dataset) {
       throw new NotFoundException(`Dataset ${input.datasetId} was not found.`);
@@ -34,13 +34,10 @@ export class DiscoveryService {
       dataset.analysis ?? this.storeService.setDatasetAnalysis(dataset.id, this.profilingService.analyzeDataset(dataset));
     const recommendation =
       dataset.recommendation ??
-      this.storeService.setDatasetRecommendation(
-        dataset.id,
-        this.recommendationService.recommendDataset({
-          dataset,
-          metadataColumns: input.metadataColumns,
-        }),
-      );
+      this.storeService.setDatasetRecommendation(dataset.id, await this.recommendationService.recommendDataset({
+        dataset,
+        metadataColumns: input.metadataColumns,
+      }));
 
     const selectedDomains =
       input.selectedDomains.length > 0
