@@ -62,3 +62,54 @@
 
 - 이 데이터셋은 파이프라인 동작 검증에는 적합했지만, 현재 추천 도메인 체계와는 잘 맞지 않았다.
 - 텍스트/콘텐츠 분류 계열 도메인을 catalog에 추가하면 결과가 더 자연스러워질 가능성이 높다.
+
+## 2026-04-02 15:25 KST
+
+### Recommendation / Discovery Quality Retest
+
+- 실행 환경: 로컬 Nest 앱 내부 호출 (`app.init()` 기반, HTTP listen 없이 서비스 직접 실행)
+- 목적: analyze / recommend / discovery 품질 개선 후 실제 데이터셋 재검증
+
+#### ai_vs_human_content_v2_20000.csv
+
+- 입력 파일: `/Users/leejunhyeong/Downloads/ai_vs_human_content_v2_20000.csv`
+- taskType: `classification`
+- targetColumns: `["label"]`
+
+결과 요약:
+
+- `analyze -> recommend -> discovery -> results` 흐름 재검증 완료
+- `metadataCandidates`가 `["id"]`로 축소됨
+- `prompt`, `content`, `source`, `topic`, `word_count`, `char_count`, `language` 등이 feature로 유지됨
+- `inferredTextColumns=["prompt","content"]`
+- 추천 도메인이 텍스트/NLP 계열로 정렬됨:
+  - `dom-ai-generated-content-detection`
+  - `dom-text-classification`
+  - `dom-content-authenticity`
+  - `dom-nlp`
+- `expandedKeywords`와 `generatedQueries`가 AI-vs-human / text authenticity 중심으로 생성됨
+- discovery 결과도 텍스트/NLP seed 위주로 정렬됨
+- 최종 결과: `knowledgeCount=5`, `datasetCount=5`
+
+메모:
+
+- 이 실행은 샌드박스 내 네트워크 제한 때문에 원격 LLM 호출은 `EPERM`으로 fallback 되었지만, rule-based 품질 개선 효과는 충분히 확인됐다.
+- 의료/금융/산업 계열 잡음은 최종 discovery 결과에서 제거됐다.
+
+#### Clinical Sample CSV
+
+- 입력 파일: 임시 clinical sample table
+- taskType: `classification`
+- targetColumns: `["adverse_event_flag"]`
+
+결과 요약:
+
+- `metadataCandidates=["patient_id","visit_date"]`
+- `featureColumns=["heart_rate","alt_u_l"]`
+- `inferredTemporalColumns=["visit_date"]`
+- 추천 도메인은 `dom-medical` 중심으로 유지됨
+- discovery 결과도 `ds-mimic-demo`, `ds-synthea`, `kn-ich-e2a` 등 의료 계열만 남음
+
+메모:
+
+- 텍스트/NLP 개선이 기존 clinical table 추천 흐름을 깨지 않았음을 확인했다.

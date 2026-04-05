@@ -1,14 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import { domainCatalog } from '../common/catalog';
+import { domainCatalog, modalityCatalog, taskCatalog } from '../common/catalog';
+import { tokenize, uniqueKeepOrder } from '../common/text';
 import type {
   DatasetAnalysisResponse,
   DatasetRecord,
   DomainRecommendationResponse,
+  ModalitySignal,
   RecommendedDomain,
+  TaskSignal,
 } from '../common/contracts';
 
 type OpenAiRecommendationItem = {
-  id: string;
+  id?: string;
+  name?: string;
   recommendationReason: string;
   keywords: string[];
   relevance: 'high' | 'medium' | 'low';
@@ -17,15 +21,38 @@ type OpenAiRecommendationItem = {
 type OpenAiRecommendationPayload = {
   extractedKeywords: string[];
   descriptionSignals: string[];
+  primaryDomainId?: string;
+  taskSignals?: string[];
+  modalitySignals?: string[];
   recommendedDomains: OpenAiRecommendationItem[];
   expandedKeywords: string[];
   generatedQueries: string[];
+};
+
+type ParsedLlmRecommendation = {
+  payload: OpenAiRecommendationPayload;
+  rawOutput: string;
+};
+
+type DomainMappingResult = {
+  domains: RecommendedDomain[];
+  mapped: Array<{ input: string; domainId: string; method: string }>;
+  unmapped: string[];
+};
+
+type SignalMappingResult<T extends string> = {
+  signals: T[];
+  mapped: Array<{ input: string; id: T; method: string }>;
+  unmapped: string[];
 };
 
 @Injectable()
 export class OpenAiRecommendationService {
   private readonly maxConnectRetries = 2;
   private readonly provider = (process.env.LLM_PROVIDER ?? 'rule-based').trim().toLowerCase();
+  private readonly allowRuleBasedFallback = ['1', 'true', 'yes', 'on'].includes(
+    (process.env.LLM_ALLOW_RULE_BASED_FALLBACK ?? '').trim().toLowerCase(),
+  );
   private readonly apiKey =
     process.env.LLM_API_KEY?.trim() ?? process.env.OPENAI_API_KEY?.trim() ?? '';
   private readonly baseUrl = (
@@ -74,9 +101,34 @@ export class OpenAiRecommendationService {
         throw new Error('LLM response did not contain structured JSON output.');
       }
 
-      const normalizedDomains = this.normalizeDomains(parsed.recommendedDomains);
-      if (normalizedDomains.length === 0) {
-        throw new Error('LLM returned no valid recommended domains.');
+      const mappingResult = this.normalizeDomains(parsed.payload.recommendedDomains);
+      const taskMapping = this.normalizeTaskSignals(parsed.payload.taskSignals ?? [], input.analysis.taskSignals ?? []);
+      const modalityMapping = this.normalizeModalitySignals(
+        parsed.payload.modalitySignals ?? [],
+        input.analysis.modalitySignals ?? [],
+      );
+      const primaryDomainId = this.resolvePrimaryDomainId(
+        parsed.payload.primaryDomainId,
+        mappingResult.domains,
+      );
+      console.info(
+        `[OpenAiRecommendationService] raw output ${JSON.stringify({
+          datasetId: input.dataset.id,
+          rawOutput: parsed.rawOutput,
+          primaryDomainId,
+          mapped: mappingResult.mapped,
+          unmapped: mappingResult.unmapped,
+          mappedTaskSignals: taskMapping.mapped,
+          unmappedTaskSignals: taskMapping.unmapped,
+          mappedModalitySignals: modalityMapping.mapped,
+          unmappedModalitySignals: modalityMapping.unmapped,
+        })}`,
+      );
+
+      if (mappingResult.domains.length === 0) {
+        throw new Error(
+          `LLM returned no valid recommended domains. mappingFailures=${mappingResult.unmapped.join(', ') || '(empty)'}`,
+        );
       }
 
       console.info(
@@ -88,21 +140,33 @@ export class OpenAiRecommendationService {
         datasetId: input.dataset.id,
         datasetSummary: input.datasetSummary,
         evidenceSummary: {
-          extractedKeywords: parsed.extractedKeywords.slice(0, 12),
+          extractedKeywords: parsed.payload.extractedKeywords.slice(0, 12),
           influentialFeatureColumns: input.deterministicFeatureColumns.slice(0, 6),
           influentialTargetColumns: input.dataset.targetColumns.slice(0, 4),
-          descriptionSignals: parsed.descriptionSignals.slice(0, 6),
+          descriptionSignals: parsed.payload.descriptionSignals.slice(0, 6),
         },
-        recommendedDomains: normalizedDomains,
-        expandedKeywords: parsed.expandedKeywords.slice(0, 18),
-        generatedQueries: parsed.generatedQueries.slice(0, 5),
+        primaryDomainId,
+        taskSignals: taskMapping.signals,
+        modalitySignals: modalityMapping.signals,
+        recommendedDomains: mappingResult.domains,
+        expandedKeywords: parsed.payload.expandedKeywords.slice(0, 18),
+        generatedQueries: parsed.payload.generatedQueries.slice(0, 5),
       };
     } catch (error) {
       const message = this.describeError(error);
-      console.warn(
-        `[OpenAiRecommendationService] fallback to rule-based recommendation (${this.provider}/${this.apiMode}/${this.model}, baseUrl=${this.baseUrl}): ${message}`,
+      if (this.allowRuleBasedFallback) {
+        console.warn(
+          `[OpenAiRecommendationService] fallback to rule-based recommendation (${this.provider}/${this.apiMode}/${this.model}, baseUrl=${this.baseUrl}): ${message}`,
+        );
+        return null;
+      }
+
+      console.error(
+        `[OpenAiRecommendationService] remote recommendation failed (${this.provider}/${this.apiMode}/${this.model}, baseUrl=${this.baseUrl}): ${message}`,
       );
-      return null;
+      throw new Error(
+        `Remote LLM recommendation failed and fallback is disabled. ${message}`,
+      );
     } finally {
       clearTimeout(timeout);
     }
@@ -145,8 +209,11 @@ export class OpenAiRecommendationService {
       'Start with { and end with }.',
       'Do not include markdown fences.',
       'Do not include analysis, preamble, or explanation outside JSON.',
-      'Use only the provided domain catalog IDs.',
-      'Do not invent new domains.',
+      'Choose only from the provided domain catalog.',
+      'Choose task signals only from the provided task catalog.',
+      'Choose modality signals only from the provided modality catalog.',
+      'Prefer the provided domain IDs, but if needed you may also repeat the catalog title in the name field.',
+      'Do not invent new domains outside the catalog.',
       'Favor practical search utility for downstream discovery over broad speculation.',
       'When the evidence is weak, keep relevance low instead of overstating confidence.',
     ].join(' ');
@@ -161,12 +228,27 @@ export class OpenAiRecommendationService {
     const domainList = domainCatalog
       .map(
         (domain) =>
-          `- ${domain.id}: ${domain.title} | ${domain.shortDescription} | keywords=${domain.keywords.join(', ')}`,
+          `- ${domain.id}: ${domain.title} | ${domain.shortDescription} | aliases=${(domain.aliases ?? []).join(', ') || '(none)'} | keywords=${domain.keywords.join(', ')}`,
+      )
+      .join('\n');
+    const taskList = taskCatalog
+      .map(
+        (task) =>
+          `- ${task.id}: ${task.title} | aliases=${(task.aliases ?? []).join(', ') || '(none)'} | signals=${[
+            ...(task.strongSignals ?? []),
+            ...(task.supportSignals ?? []),
+          ].join(', ')}`,
+      )
+      .join('\n');
+    const modalityList = modalityCatalog
+      .map(
+        (modality) =>
+          `- ${modality.id}: ${modality.title} | aliases=${(modality.aliases ?? []).join(', ') || '(none)'} | keywords=${(modality.keywords ?? []).join(', ')}`,
       )
       .join('\n');
 
     return [
-      'Select up to 5 domains from the catalog and produce search-oriented recommendation output.',
+      'Select 1 to 4 domains from the catalog and produce search-oriented recommendation output.',
       'Dataset summary:',
       `fileName=${input.dataset.fileName}`,
       `taskType=${input.dataset.taskType}`,
@@ -176,6 +258,8 @@ export class OpenAiRecommendationService {
       `targetColumns=${input.dataset.targetColumns.join(', ')}`,
       `metadataColumns=${input.metadataColumns.join(', ') || '(none)'}`,
       `featureColumns=${input.deterministicFeatureColumns.join(', ') || '(none)'}`,
+      `taskSignals=${(input.analysis.taskSignals ?? []).join(', ') || '(none)'}`,
+      `modalitySignals=${(input.analysis.modalitySignals ?? []).join(', ') || '(none)'}`,
       `description=${input.dataset.description || '(empty)'}`,
       `missingRates=${input.analysis.missingStats
         .map((item) => `${item.column}:${item.missingRate.toFixed(3)}`)
@@ -198,10 +282,260 @@ export class OpenAiRecommendationService {
         .join(' | ') || '(none)'}`,
       'Domain catalog:',
       domainList,
-      'Return a JSON object only with keys: extractedKeywords, descriptionSignals, recommendedDomains, expandedKeywords, generatedQueries.',
-      'Each recommendedDomains item must contain: id, recommendationReason, keywords, relevance.',
-      'Example shape: {"extractedKeywords":["k1"],"descriptionSignals":["s1"],"recommendedDomains":[{"id":"dom-medical","recommendationReason":"reason","keywords":["k1"],"relevance":"low"}],"expandedKeywords":["k1"],"generatedQueries":["query"]}',
+      'Task catalog:',
+      taskList,
+      'Modality catalog:',
+      modalityList,
+      'Return a JSON object only with keys: extractedKeywords, descriptionSignals, primaryDomainId, taskSignals, modalitySignals, recommendedDomains, expandedKeywords, generatedQueries.',
+      'Each recommendedDomains item must contain: id, name, recommendationReason, keywords, relevance.',
+      'primaryDomainId must be one of the provided domain IDs.',
+      'taskSignals must be selected only from the provided task IDs.',
+      'modalitySignals must be selected only from the provided modality IDs.',
+      'Use the catalog IDs when possible. If you use a natural-language label, put it in name and still try to keep id close to the catalog.',
+      'Example shape: {"extractedKeywords":["k1"],"descriptionSignals":["s1"],"primaryDomainId":"dom-nlp","taskSignals":["classification"],"modalitySignals":["text","document"],"recommendedDomains":[{"id":"dom-nlp","name":"Natural language processing dataset for text understanding tasks","recommendationReason":"reason","keywords":["k1"],"relevance":"low"}],"expandedKeywords":["k1"],"generatedQueries":["query"]}',
     ].join('\n');
+  }
+
+  private buildStructuredSchema(): Record<string, unknown> {
+    return {
+      type: 'object',
+      additionalProperties: false,
+      required: [
+        'extractedKeywords',
+        'descriptionSignals',
+        'primaryDomainId',
+        'taskSignals',
+        'modalitySignals',
+        'recommendedDomains',
+        'expandedKeywords',
+        'generatedQueries',
+      ],
+      properties: {
+        extractedKeywords: {
+          type: 'array',
+          items: { type: 'string' },
+          minItems: 1,
+          maxItems: 12,
+        },
+        descriptionSignals: {
+          type: 'array',
+          items: { type: 'string' },
+          minItems: 1,
+          maxItems: 6,
+        },
+        primaryDomainId: {
+          type: 'string',
+        },
+        taskSignals: {
+          type: 'array',
+          items: {
+            type: 'string',
+            enum: taskCatalog.map((task) => task.id),
+          },
+          minItems: 1,
+          maxItems: 3,
+        },
+        modalitySignals: {
+          type: 'array',
+          items: {
+            type: 'string',
+            enum: modalityCatalog.map((modality) => modality.id),
+          },
+          minItems: 1,
+          maxItems: 3,
+        },
+        recommendedDomains: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['id', 'recommendationReason', 'keywords', 'relevance'],
+            properties: {
+              id: {
+                type: 'string',
+              },
+              name: {
+                type: 'string',
+              },
+              recommendationReason: {
+                type: 'string',
+              },
+              keywords: {
+                type: 'array',
+                items: { type: 'string' },
+                minItems: 1,
+                maxItems: 6,
+              },
+              relevance: {
+                type: 'string',
+                enum: ['high', 'medium', 'low'],
+              },
+            },
+          },
+          minItems: 1,
+          maxItems: 5,
+        },
+        expandedKeywords: {
+          type: 'array',
+          items: { type: 'string' },
+          minItems: 1,
+          maxItems: 18,
+        },
+        generatedQueries: {
+          type: 'array',
+          items: { type: 'string' },
+          minItems: 1,
+          maxItems: 5,
+        },
+      },
+    };
+  }
+
+  private async repairStructuredPayload(
+    rawContent: string,
+    signal: AbortSignal,
+  ): Promise<OpenAiRecommendationPayload | null> {
+    const schema = this.buildStructuredSchema();
+    const response = await this.fetchWithRetry(this.buildChatCompletionsUrl(), {
+      method: 'POST',
+      headers: this.buildHeaders(false),
+      body: JSON.stringify({
+        model: this.model,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Convert the previous draft into valid JSON only. Return one JSON object that matches the provided schema exactly. Do not include analysis or markdown.',
+          },
+          {
+            role: 'user',
+            content: [
+              'Previous draft:',
+              rawContent,
+              'Return valid JSON only with keys: extractedKeywords, descriptionSignals, primaryDomainId, taskSignals, modalitySignals, recommendedDomains, expandedKeywords, generatedQueries.',
+            ].join('\n'),
+          },
+        ],
+        stream: false,
+        temperature: 0,
+        max_tokens: 900,
+        top_p: 1,
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'domain_recommendation',
+            strict: true,
+            schema,
+          },
+        },
+        extra_body: {
+          guided_json: schema,
+        },
+      }),
+      signal,
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    const content = payload.choices?.[0]?.message?.content ?? '';
+    return this.parseStructuredPayload(content);
+  }
+
+  private salvageStructuredPayload(
+    rawContent: string,
+    input: {
+      dataset: DatasetRecord;
+      analysis: DatasetAnalysisResponse;
+      metadataColumns: string[];
+      datasetSummary: DomainRecommendationResponse['datasetSummary'];
+      deterministicFeatureColumns: string[];
+    },
+  ): OpenAiRecommendationPayload | null {
+    const mentionedDomainIds = uniqueKeepOrder(
+      (rawContent.match(/dom-[a-z0-9-]+/gi) ?? []).map((value) => value.toLowerCase()),
+    );
+    const rawReason = rawContent.replace(/\s+/g, ' ').trim();
+    const resolvedDomains = uniqueKeepOrder([
+      ...mentionedDomainIds
+        .map((value) => this.resolveDomainId([value])?.domainId ?? null)
+        .filter((value): value is string => value != null),
+      this.resolveDomainId([rawContent])?.domainId ?? '',
+    ]).filter(Boolean);
+
+    if (resolvedDomains.length === 0) {
+      return null;
+    }
+
+    const taskSignals = this.extractMentionedSignals<TaskSignal>(
+      rawContent,
+      taskCatalog.map((task) => ({ id: task.id, labels: [task.id, task.title, ...(task.aliases ?? [])] })),
+      input.analysis.taskSignals ?? [],
+    );
+    const modalitySignals = this.extractMentionedSignals<ModalitySignal>(
+      rawContent,
+      modalityCatalog.map((modality) => ({
+        id: modality.id,
+        labels: [modality.id, modality.title, ...(modality.aliases ?? [])],
+      })),
+      input.analysis.modalitySignals ?? [],
+    );
+    const labelHints = uniqueKeepOrder(
+      input.analysis.imbalanceSummary.flatMap((item) => item.stat?.valueCounts.map((value) => value.value) ?? []),
+    );
+    const extractedKeywords = uniqueKeepOrder([
+      ...input.deterministicFeatureColumns.slice(0, 6),
+      ...input.dataset.targetColumns,
+      ...labelHints,
+      ...taskSignals,
+      ...modalitySignals,
+    ]).slice(0, 12);
+    const descriptionSignals = uniqueKeepOrder([
+      input.dataset.description,
+      `task signals: ${taskSignals.join(', ')}`,
+      `modality signals: ${modalitySignals.join(', ')}`,
+      'structured response salvaged from free-form LLM output',
+    ])
+      .filter(Boolean)
+      .slice(0, 6);
+    const recommendedDomains: OpenAiRecommendationItem[] = [];
+    for (const domainId of resolvedDomains.slice(0, 4)) {
+      const match = domainCatalog.find((domain) => domain.id === domainId);
+      if (!match) {
+        continue;
+      }
+      recommendedDomains.push({
+        id: match.id,
+        name: match.title,
+        recommendationReason: rawReason.slice(0, 320),
+        keywords: match.keywords.slice(0, 6),
+        relevance: 'medium',
+      });
+    }
+    const generatedQueries = uniqueKeepOrder(
+      recommendedDomains.flatMap((domain) => {
+        if (!domain.id) {
+          return [];
+        }
+        const match = domainCatalog.find((entry) => entry.id === domain.id);
+        return match?.querySeeds ?? [];
+      }),
+    ).slice(0, 5);
+
+    return {
+      extractedKeywords,
+      descriptionSignals,
+      primaryDomainId: resolvedDomains[0],
+      taskSignals,
+      modalitySignals,
+      recommendedDomains,
+      expandedKeywords: uniqueKeepOrder([...extractedKeywords, ...generatedQueries]).slice(0, 18),
+      generatedQueries,
+    };
   }
 
   private async callResponsesApi(
@@ -213,7 +547,8 @@ export class OpenAiRecommendationService {
       deterministicFeatureColumns: string[];
     },
     signal: AbortSignal,
-  ): Promise<OpenAiRecommendationPayload | null> {
+  ): Promise<ParsedLlmRecommendation | null> {
+    const schema = this.buildStructuredSchema();
     const response = await this.fetchWithRetry(this.buildResponsesUrl(), {
       method: 'POST',
       headers: this.buildHeaders(true),
@@ -244,72 +579,7 @@ export class OpenAiRecommendationService {
             type: 'json_schema',
             name: 'domain_recommendation',
             strict: true,
-            schema: {
-              type: 'object',
-              additionalProperties: false,
-              required: [
-                'extractedKeywords',
-                'descriptionSignals',
-                'recommendedDomains',
-                'expandedKeywords',
-                'generatedQueries',
-              ],
-              properties: {
-                extractedKeywords: {
-                  type: 'array',
-                  items: { type: 'string' },
-                  minItems: 1,
-                  maxItems: 12,
-                },
-                descriptionSignals: {
-                  type: 'array',
-                  items: { type: 'string' },
-                  minItems: 1,
-                  maxItems: 6,
-                },
-                recommendedDomains: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    additionalProperties: false,
-                    required: ['id', 'recommendationReason', 'keywords', 'relevance'],
-                    properties: {
-                      id: {
-                        type: 'string',
-                        enum: domainCatalog.map((domain) => domain.id),
-                      },
-                      recommendationReason: {
-                        type: 'string',
-                      },
-                      keywords: {
-                        type: 'array',
-                        items: { type: 'string' },
-                        minItems: 1,
-                        maxItems: 6,
-                      },
-                      relevance: {
-                        type: 'string',
-                        enum: ['high', 'medium', 'low'],
-                      },
-                    },
-                  },
-                  minItems: 1,
-                  maxItems: 5,
-                },
-                expandedKeywords: {
-                  type: 'array',
-                  items: { type: 'string' },
-                  minItems: 1,
-                  maxItems: 18,
-                },
-                generatedQueries: {
-                  type: 'array',
-                  items: { type: 'string' },
-                  minItems: 1,
-                  maxItems: 5,
-                },
-              },
-            },
+            schema,
           },
         },
       }),
@@ -321,7 +591,9 @@ export class OpenAiRecommendationService {
     }
 
     const payload = (await response.json()) as Record<string, unknown>;
-    return this.extractJsonPayload(payload);
+    const rawOutput = this.extractOutputText(payload) ?? JSON.stringify(payload);
+    const parsed = this.extractJsonPayload(payload);
+    return parsed ? { payload: parsed, rawOutput } : null;
   }
 
   private async callChatCompletions(
@@ -333,7 +605,8 @@ export class OpenAiRecommendationService {
       deterministicFeatureColumns: string[];
     },
     signal: AbortSignal,
-  ): Promise<OpenAiRecommendationPayload | null> {
+  ): Promise<ParsedLlmRecommendation | null> {
+    const schema = this.buildStructuredSchema();
     const response = await this.fetchWithRetry(this.buildChatCompletionsUrl(), {
       method: 'POST',
       headers: this.buildHeaders(false),
@@ -354,6 +627,17 @@ export class OpenAiRecommendationService {
         max_tokens: 900,
         top_p: 1,
         reasoning_effort: 'low',
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'domain_recommendation',
+            strict: true,
+            schema,
+          },
+        },
+        extra_body: {
+          guided_json: schema,
+        },
       }),
       signal,
     });
@@ -367,12 +651,19 @@ export class OpenAiRecommendationService {
     };
 
     const content = payload.choices?.[0]?.message?.content ?? '';
-    const extracted = this.extractJsonBlock(content);
-    if (!extracted) {
-      throw new Error('No JSON block found in chat completion response.');
+    const parsed =
+      this.parseStructuredPayload(content) ??
+      (await this.repairStructuredPayload(content, signal)) ??
+      this.salvageStructuredPayload(content, input);
+    if (!parsed) {
+      const preview = content.replace(/\s+/g, ' ').slice(0, 500);
+      throw new Error(`No JSON block found in chat completion response. raw=${preview || '(empty)'}`);
     }
 
-    return JSON.parse(extracted) as OpenAiRecommendationPayload;
+    return {
+      payload: parsed,
+      rawOutput: content,
+    };
   }
 
   private async fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
@@ -473,22 +764,23 @@ export class OpenAiRecommendationService {
       return null;
     }
 
-    return JSON.parse(outputText) as OpenAiRecommendationPayload;
+    return this.parseStructuredPayload(outputText);
   }
 
   private extractJsonBlock(text: string): string | null {
-    const fenced = text.match(/```json\s*([\s\S]*?)```/i) ?? text.match(/```\s*([\s\S]*?)```/);
-    if (fenced?.[1]) {
-      return fenced[1].trim();
+    const fencedMatches = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)];
+    for (const match of fencedMatches) {
+      const candidate = match[1]?.trim();
+      if (!candidate) {
+        continue;
+      }
+      const parsedCandidate = this.extractFirstJsonObject(candidate);
+      if (parsedCandidate) {
+        return parsedCandidate;
+      }
     }
 
-    const firstBrace = text.indexOf('{');
-    const lastBrace = text.lastIndexOf('}');
-    if (firstBrace >= 0 && lastBrace > firstBrace) {
-      return text.slice(firstBrace, lastBrace + 1);
-    }
-
-    return null;
+    return this.extractFirstJsonObject(text);
   }
 
   private extractOutputText(payload: Record<string, unknown>): string | null {
@@ -524,20 +816,107 @@ export class OpenAiRecommendationService {
     return null;
   }
 
-  private normalizeDomains(items: OpenAiRecommendationItem[]): RecommendedDomain[] {
+  private parseStructuredPayload(text: string): OpenAiRecommendationPayload | null {
+    const jsonBlock = this.extractJsonBlock(text);
+    if (!jsonBlock) {
+      return null;
+    }
+
+    return JSON.parse(jsonBlock) as OpenAiRecommendationPayload;
+  }
+
+  private extractFirstJsonObject(text: string): string | null {
+    let depth = 0;
+    let start = -1;
+    let inString = false;
+    let escapeNext = false;
+
+    for (let index = 0; index < text.length; index += 1) {
+      const char = text[index];
+
+      if (inString) {
+        if (escapeNext) {
+          escapeNext = false;
+          continue;
+        }
+        if (char === '\\') {
+          escapeNext = true;
+          continue;
+        }
+        if (char === '"') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (char === '"') {
+        inString = true;
+        continue;
+      }
+
+      if (char === '{') {
+        if (depth === 0) {
+          start = index;
+        }
+        depth += 1;
+        continue;
+      }
+
+      if (char !== '}' || depth === 0) {
+        continue;
+      }
+
+      depth -= 1;
+      if (depth !== 0 || start < 0) {
+        continue;
+      }
+
+      const candidate = text.slice(start, index + 1);
+      try {
+        JSON.parse(candidate);
+        return candidate;
+      } catch {
+        start = -1;
+      }
+    }
+
+    return null;
+  }
+
+  private normalizeDomains(items: OpenAiRecommendationItem[]): DomainMappingResult {
     const seen = new Set<string>();
     const result: RecommendedDomain[] = [];
+    const mapped: Array<{ input: string; domainId: string; method: string }> = [];
+    const unmapped: string[] = [];
 
     for (const item of items) {
-      if (seen.has(item.id)) {
+      const candidates = uniqueKeepOrder([
+        item.id?.trim() ?? '',
+        item.name?.trim() ?? '',
+        item.recommendationReason?.trim() ?? '',
+        item.keywords.join(' ').trim(),
+      ]).filter(Boolean);
+
+      const mapping = this.resolveDomainId(candidates);
+      if (!mapping) {
+        unmapped.push(candidates.join(' | '));
         continue;
       }
-      const match = domainCatalog.find((domain) => domain.id === item.id);
+      if (seen.has(mapping.domainId)) {
+        continue;
+      }
+      const match = domainCatalog.find((domain) => domain.id === mapping.domainId);
       if (!match) {
+        unmapped.push(candidates.join(' | '));
         continue;
       }
 
-      seen.add(item.id);
+      seen.add(mapping.domainId);
+      mapped.push({
+        input: candidates[0],
+        domainId: mapping.domainId,
+        method: mapping.method,
+      });
       result.push({
         id: match.id,
         name: match.title,
@@ -548,6 +927,200 @@ export class OpenAiRecommendationService {
       });
     }
 
-    return result.slice(0, 5);
+    return {
+      domains: result.slice(0, 5),
+      mapped,
+      unmapped,
+    };
+  }
+
+  private resolvePrimaryDomainId(primaryDomainId: string | undefined, domains: RecommendedDomain[]): string | null {
+    if (primaryDomainId) {
+      const resolved = this.resolveDomainId([primaryDomainId]);
+      if (resolved) {
+        return resolved.domainId;
+      }
+    }
+
+    return domains[0]?.id ?? null;
+  }
+
+  private normalizeTaskSignals(rawSignals: string[], fallbackSignals: TaskSignal[]): SignalMappingResult<TaskSignal> {
+    return this.normalizeSignals<TaskSignal>(
+      rawSignals,
+      fallbackSignals,
+      taskCatalog.map((task) => ({
+        id: task.id,
+        labels: uniqueKeepOrder([task.id, task.title, ...(task.aliases ?? [])]),
+      })),
+    );
+  }
+
+  private normalizeModalitySignals(
+    rawSignals: string[],
+    fallbackSignals: ModalitySignal[],
+  ): SignalMappingResult<ModalitySignal> {
+    return this.normalizeSignals<ModalitySignal>(
+      rawSignals,
+      fallbackSignals,
+      modalityCatalog.map((modality) => ({
+        id: modality.id,
+        labels: uniqueKeepOrder([modality.id, modality.title, ...(modality.aliases ?? [])]),
+      })),
+    );
+  }
+
+  private extractMentionedSignals<T extends string>(
+    rawContent: string,
+    catalog: Array<{ id: T; labels: string[] }>,
+    fallbackSignals: T[],
+  ): T[] {
+    const extracted: T[] = catalog
+      .filter((entry) =>
+        entry.labels.some((label) => {
+          const normalizedLabel = this.normalizeLabel(label);
+          const normalizedRaw = this.normalizeLabel(rawContent);
+          return normalizedRaw.includes(normalizedLabel);
+        }),
+      )
+      .map((entry) => entry.id);
+
+    return [...new Set<T>([...extracted, ...fallbackSignals])].slice(0, 3);
+  }
+
+  private normalizeSignals<T extends string>(
+    rawSignals: string[],
+    fallbackSignals: T[],
+    catalog: Array<{ id: T; labels: string[] }>,
+  ): SignalMappingResult<T> {
+    const signals: T[] = [];
+    const mapped: Array<{ input: string; id: T; method: string }> = [];
+    const unmapped: string[] = [];
+
+    for (const raw of rawSignals) {
+      const resolved = this.resolveSignalId(raw, catalog);
+      if (!resolved) {
+        unmapped.push(raw);
+        continue;
+      }
+      if (signals.includes(resolved.id)) {
+        continue;
+      }
+      signals.push(resolved.id);
+      mapped.push({ input: raw, id: resolved.id, method: resolved.method });
+    }
+
+    for (const fallback of fallbackSignals) {
+      if (!signals.includes(fallback)) {
+        signals.push(fallback);
+      }
+    }
+
+    return {
+      signals,
+      mapped,
+      unmapped,
+    };
+  }
+
+  private resolveSignalId<T extends string>(
+    candidate: string,
+    catalog: Array<{ id: T; labels: string[] }>,
+  ): { id: T; method: 'id' | 'alias' | 'similarity' } | null {
+    const normalized = this.normalizeLabel(candidate);
+    if (!normalized) {
+      return null;
+    }
+
+    for (const entry of catalog) {
+      for (const label of entry.labels) {
+        const normalizedLabel = this.normalizeLabel(label);
+        if (normalizedLabel === normalized) {
+          return { id: entry.id, method: label === entry.id ? 'id' : 'alias' };
+        }
+        if (normalizedLabel.includes(normalized) || normalized.includes(normalizedLabel)) {
+          return { id: entry.id, method: 'alias' };
+        }
+      }
+    }
+
+    const candidateTokens = new Set(tokenize(candidate));
+    let best: { id: T; score: number } | null = null;
+    for (const entry of catalog) {
+      const labelTokens = new Set(tokenize(entry.labels.join(' ')));
+      const overlap = [...candidateTokens].filter((token) => labelTokens.has(token)).length;
+      const score = overlap / Math.max(candidateTokens.size, 1);
+      if (score >= 0.45 && (!best || score > best.score)) {
+        best = { id: entry.id, score };
+      }
+    }
+
+    return best ? { id: best.id, method: 'similarity' } : null;
+  }
+
+  private resolveDomainId(
+    candidates: string[],
+  ): { domainId: string; method: 'id' | 'alias' | 'similarity' } | null {
+    const aliasEntries = domainCatalog.flatMap((domain) => [
+      { label: domain.id, domainId: domain.id, method: 'id' as const },
+      { label: domain.title, domainId: domain.id, method: 'alias' as const },
+      ...((domain.aliases ?? []).map((alias) => ({
+        label: alias,
+        domainId: domain.id,
+        method: 'alias' as const,
+      }))),
+    ]);
+
+    for (const candidate of candidates) {
+      const normalized = this.normalizeLabel(candidate);
+      if (!normalized) {
+        continue;
+      }
+
+      const direct = aliasEntries.find((entry) => this.normalizeLabel(entry.label) === normalized);
+      if (direct) {
+        return { domainId: direct.domainId, method: direct.method };
+      }
+
+      const aliasContains = aliasEntries.find((entry) => {
+        const normalizedAlias = this.normalizeLabel(entry.label);
+        return normalizedAlias.includes(normalized) || normalized.includes(normalizedAlias);
+      });
+      if (aliasContains) {
+        return { domainId: aliasContains.domainId, method: 'alias' };
+      }
+    }
+
+    let bestMatch: { domainId: string; score: number } | null = null;
+    for (const candidate of candidates) {
+      const candidateTokens = new Set(tokenize(candidate));
+      if (candidateTokens.size === 0) {
+        continue;
+      }
+      for (const domain of domainCatalog) {
+        const domainTokens = new Set(
+          tokenize(
+            domain.id,
+            domain.title,
+            domain.keywords.join(' '),
+            (domain.aliases ?? []).join(' '),
+          ),
+        );
+        const overlap = [...candidateTokens].filter((token) => domainTokens.has(token)).length;
+        const score = overlap / Math.max(candidateTokens.size, 1);
+        if (score >= 0.45 && (!bestMatch || score > bestMatch.score)) {
+          bestMatch = { domainId: domain.id, score };
+        }
+      }
+    }
+
+    return bestMatch ? { domainId: bestMatch.domainId, method: 'similarity' } : null;
+  }
+
+  private normalizeLabel(value: string): string {
+    return value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
   }
 }

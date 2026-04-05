@@ -45,11 +45,11 @@ LLM과 규칙 기반 fallback을 함께 조합하는 서비스:
 1. rule-based recommendation을 먼저 만들 수 있는 상태를 유지
 2. provider 설정이 있으면 LLM 호출 시도
 3. LLM이 정상 응답하면 그 결과를 recommendation 응답으로 사용
-4. LLM 호출 실패/timeout/파싱 실패 시 rule-based recommendation으로 fallback
+4. LLM 호출 실패/timeout/파싱 실패 시 설정에 따라 fallback 또는 즉시 실패
 ```
 
-즉 LLM은 선택적 가속 계층이지,
-현재 서버가 LLM 없이는 동작하지 않는 구조는 아니다.
+즉 LLM은 선택적 가속 계층이다.
+다만 fallback을 끄면 추천 단계는 원격 LLM 성공이 필수다.
 
 ## 환경변수
 
@@ -66,6 +66,7 @@ vllm
 
 ```text
 LLM_PROVIDER=openai
+LLM_ALLOW_RULE_BASED_FALLBACK=false
 OPENAI_API_KEY=...
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-5-mini
@@ -76,6 +77,7 @@ OPENAI_TIMEOUT_MS=30000
 
 ```text
 LLM_PROVIDER=openai-compatible
+LLM_ALLOW_RULE_BASED_FALLBACK=false
 LLM_BASE_URL=http://210.117.143.180:12020
 LLM_MODEL=openai/gpt-oss-120b
 LLM_API_MODE=chat_completions
@@ -87,6 +89,7 @@ LLM_TIMEOUT_MS=30000
 ```text
 LLM_API_KEY는 OpenAI-compatible 서버가 무인증이면 비워둘 수 있다.
 LLM_API_MODE는 openai면 responses, vLLM이면 chat_completions가 기본값이다.
+LLM_ALLOW_RULE_BASED_FALLBACK=false 이면 원격 LLM 실패 시 recommendation 단계가 즉시 실패한다.
 ```
 
 ## 기본 모델
@@ -182,7 +185,7 @@ missing/imbalance/numeric summary
 - 민감정보 최소화
 - 재현성 개선
 
-### 3. LLM 실패 시 fallback 유지
+### 3. LLM 실패 시 처리 정책
 
 LLM이 아래 사유로 실패할 수 있다.
 
@@ -191,8 +194,17 @@ LLM이 아래 사유로 실패할 수 있다.
 - 네트워크 문제
 - 응답 파싱 실패
 - JSON schema 위반
+- JSON 뒤에 불필요한 텍스트가 붙는 응답
 
-이 경우 현재 구현은 rule-based recommendation으로 내려간다.
+현재 구현은 두 모드를 지원한다.
+
+```text
+LLM_ALLOW_RULE_BASED_FALLBACK=true
+-> rule-based recommendation으로 fallback
+
+LLM_ALLOW_RULE_BASED_FALLBACK=false
+-> recommendation 단계에서 즉시 실패
+```
 
 ## 실행 예시
 

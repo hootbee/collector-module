@@ -98,10 +98,36 @@ export class DiscoveryService {
         expandedKeywords: context.expandedKeywords,
       });
 
-      const [knowledgeItems, datasetItems] = await Promise.all([
+      console.info(
+        `[DiscoveryService] discovery context ${JSON.stringify({
+          jobId: input.jobId,
+          datasetId: input.dataset.id,
+          selectedDomains: context.selectedDomains,
+          selectedDomainIds: context.selectedDomainIds,
+          primaryDomainId: context.primaryDomainId,
+          taskSignals: context.taskSignals,
+          modalitySignals: context.modalitySignals,
+          modality: context.modality,
+          featureColumns: context.featureColumns,
+          textColumns: context.textColumns,
+          expandedKeywords: context.expandedKeywords,
+          generatedQueries: context.generatedQueries,
+        })}`,
+      );
+
+      const [knowledgeOutcome, datasetOutcome] = await Promise.all([
         Promise.resolve(this.connectorsService.searchKnowledge(context)),
         Promise.resolve(this.connectorsService.searchDatasets(context)),
       ]);
+      const knowledgeItems = knowledgeOutcome.items;
+      const datasetItems = datasetOutcome.items;
+
+      console.info(
+        `[DiscoveryService] knowledge ranking ${JSON.stringify(knowledgeOutcome.debug)}`,
+      );
+      console.info(
+        `[DiscoveryService] dataset ranking ${JSON.stringify(datasetOutcome.debug)}`,
+      );
 
       this.storeService.updateJobStage(input.jobId, 'streaming candidates');
 

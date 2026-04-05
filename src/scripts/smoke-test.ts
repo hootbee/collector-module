@@ -1,48 +1,18 @@
 import { createApp } from '../main';
+import { parseCsvBuffer } from '../common/csv';
+import { DiscoveryService } from '../discovery/discovery.service';
+import { DomainRecommendationService } from '../domain-recommendation/domain-recommendation.service';
+import { ProfilingService } from '../profiling/profiling.service';
+import { StoreService } from '../store/store.service';
 
-type SessionResponse = {
-  sessionId: string;
-};
-
-type UploadResponse = {
-  datasetId: string;
-};
-
-type AnalyzeResponse = {
-  metadataCandidates: string[];
-  rowCount: number;
-};
-
-type RecommendationResponse = {
-  recommendedDomains: Array<{ id: string; name: string }>;
-};
-
-type JobStatusResponse = {
-  jobId: string;
-  status: 'queued' | 'running' | 'completed' | 'failed';
-};
-
-type JobResultsResponse = {
-  knowledgeItems: Array<{ id: string }>;
-  datasetItems: Array<{ id: string }>;
-};
-
-async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
-  if (!response.ok) {
-    throw new Error(`Request failed ${response.status}: ${await response.text()}`);
-  }
-  return (await response.json()) as T;
-}
-
-async function waitForJob(baseUrl: string, jobId: string): Promise<JobResultsResponse> {
+async function waitForJob(discoveryService: DiscoveryService, jobId: string) {
   for (let attempt = 0; attempt < 40; attempt += 1) {
-    const status = await requestJson<JobStatusResponse>(`${baseUrl}/api/v1/discovery/jobs/${jobId}`);
+    const status = discoveryService.getStatus(jobId);
     if (status.status === 'failed') {
       throw new Error(`Discovery job ${jobId} failed.`);
     }
     if (status.status === 'completed') {
-      return requestJson<JobResultsResponse>(`${baseUrl}/api/v1/discovery/jobs/${jobId}/results`);
+      return discoveryService.getResults(jobId);
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
@@ -52,10 +22,12 @@ async function waitForJob(baseUrl: string, jobId: string): Promise<JobResultsRes
 
 async function main() {
   const app = await createApp();
-  await app.listen(0, '127.0.0.1');
-  const server = app.getHttpServer() as { address(): { port: number } };
-  const { port } = server.address();
-  const baseUrl = `http://127.0.0.1:${port}`;
+  await app.init();
+
+  const storeService = app.get(StoreService);
+  const profilingService = app.get(ProfilingService);
+  const recommendationService = app.get(DomainRecommendationService);
+  const discoveryService = app.get(DiscoveryService);
 
   try {
     const csv = [
@@ -66,62 +38,45 @@ async function main() {
       'P004,2025-01-04,65,19,no',
       'P005,2025-01-05,97,62,yes',
     ].join('\n');
+    const rawBuffer = Buffer.from(csv, 'utf-8');
+    const parsed = parseCsvBuffer(rawBuffer);
 
-    const session = await requestJson<SessionResponse>(`${baseUrl}/api/v1/sessions`, {
-      method: 'POST',
+    const session = storeService.createSession();
+    const dataset = storeService.createDataset({
+      sessionId: session.id,
+      fileName: 'smoke.csv',
+      rawBuffer,
+      rows: parsed.rows,
+      columns: parsed.columns,
+      targetColumns: ['adverse_event_flag'],
+      taskType: 'classification',
+      description: 'Small clinical visit table for adverse event prediction.',
     });
 
-    const form = new FormData();
-    form.append('sessionId', session.sessionId);
-    form.append('targetColumns', JSON.stringify(['adverse_event_flag']));
-    form.append('taskType', 'classification');
-    form.append('description', 'Small clinical visit table for adverse event prediction.');
-    form.append('file', new File([csv], 'smoke.csv', { type: 'text/csv' }));
-
-    const upload = await requestJson<UploadResponse>(`${baseUrl}/api/v1/datasets/upload`, {
-      method: 'POST',
-      body: form,
-    });
-
-    const analysis = await requestJson<AnalyzeResponse>(
-      `${baseUrl}/api/v1/datasets/${upload.datasetId}/analyze`,
-      { method: 'POST' },
-    );
-
-    const recommendation = await requestJson<RecommendationResponse>(
-      `${baseUrl}/api/v1/domains/recommend`,
-      {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          datasetId: upload.datasetId,
-          metadataColumns: analysis.metadataCandidates,
-        }),
-      },
-    );
-
-    const job = await requestJson<JobStatusResponse>(`${baseUrl}/api/v1/discovery/jobs`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        datasetId: upload.datasetId,
+    const analysis = storeService.setDatasetAnalysis(dataset.id, profilingService.analyzeDataset(dataset));
+    const recommendation = storeService.setDatasetRecommendation(
+      dataset.id,
+      await recommendationService.recommendDataset({
+        dataset,
         metadataColumns: analysis.metadataCandidates,
-        selectedDomains: recommendation.recommendedDomains.slice(0, 2).map((item) => item.name),
       }),
+    );
+
+    const job = await discoveryService.createJob({
+      datasetId: dataset.id,
+      metadataColumns: analysis.metadataCandidates,
+      selectedDomains: recommendation.recommendedDomains.slice(0, 2).map((item) => item.id),
     });
 
-    const results = await waitForJob(baseUrl, job.jobId);
+    const results = await waitForJob(discoveryService, job.jobId);
 
     console.log(
       JSON.stringify(
         {
-          datasetId: upload.datasetId,
+          datasetId: dataset.id,
           rowCount: analysis.rowCount,
           metadataCandidates: analysis.metadataCandidates,
+          featureColumns: analysis.featureColumns,
           topDomains: recommendation.recommendedDomains.slice(0, 3).map((item) => item.id),
           knowledgeCount: results.knowledgeItems.length,
           datasetCount: results.datasetItems.length,

@@ -1,5 +1,19 @@
 export type TaskType = 'classification' | 'anomaly' | 'regression';
 export type DiscoveryJobStatus = 'queued' | 'running' | 'completed' | 'failed';
+export type TaskSignal =
+  | 'classification'
+  | 'regression'
+  | 'anomaly-detection'
+  | 'time-series-forecasting'
+  | 'content-authenticity'
+  | 'authorship-attribution';
+export type ModalitySignal =
+  | 'tabular'
+  | 'text'
+  | 'time-series'
+  | 'transaction'
+  | 'longitudinal'
+  | 'document';
 
 export type ColumnMissingStat = {
   column: string;
@@ -47,6 +61,9 @@ export type DomainDatasetSummary = {
   taskType: TaskType;
   metaColumns: string[];
   featureColumnCount: number;
+  featureColumns?: string[];
+  taskSignals?: TaskSignal[];
+  modalitySignals?: ModalitySignal[];
   targetColumns: string[];
   description: string;
 };
@@ -76,6 +93,11 @@ export type ExternalKnowledgeItem = {
   summary: string;
   kind: ExternalKnowledgeKind;
   matchedKeywords: string[];
+  sourceUrl?: string;
+  publisher?: string;
+  retrievalHint?: string;
+  score?: number;
+  matchedReason?: string;
 };
 
 export type ExternalDatasetItem = {
@@ -87,6 +109,12 @@ export type ExternalDatasetItem = {
   modality: string;
   licenseHint: string;
   matchedKeywords: string[];
+  sourceUrl?: string;
+  providerDetail?: string;
+  publisher?: string;
+  retrievalHint?: string;
+  score?: number;
+  matchedReason?: string;
 };
 
 export type DatasetAnalysisResponse = {
@@ -103,6 +131,12 @@ export type DatasetAnalysisResponse = {
   imbalanceSummary: TargetStatSummary<ClassImbalanceStat>[];
   numericSummary: TargetStatSummary<NumericTargetStat>[];
   metadataCandidates: string[];
+  featureColumns: string[];
+  inferredTextColumns: string[];
+  inferredIdColumns: string[];
+  inferredTemporalColumns: string[];
+  taskSignals?: TaskSignal[];
+  modalitySignals?: ModalitySignal[];
 };
 
 export type DomainRecommendationResponse = {
@@ -110,6 +144,9 @@ export type DomainRecommendationResponse = {
   datasetId: string;
   datasetSummary: DomainDatasetSummary;
   evidenceSummary: DomainEvidenceSummary;
+  primaryDomainId?: string | null;
+  taskSignals?: TaskSignal[];
+  modalitySignals?: ModalitySignal[];
   recommendedDomains: RecommendedDomain[];
   expandedKeywords: string[];
   generatedQueries: string[];
@@ -193,7 +230,19 @@ export type CreateDatasetInput = {
 export type DiscoveryContext = {
   dataset: DatasetRecord;
   selectedDomains: string[];
+  selectedDomainIds: string[];
+  primaryDomainId: string | null;
+  taskSignals: TaskSignal[];
+  modalitySignals: ModalitySignal[];
   metadataColumns: string[];
+  featureColumns: string[];
+  textColumns: string[];
+  idColumns: string[];
+  temporalColumns: string[];
+  supportColumns: string[];
+  labelHints: string[];
+  modality: 'text' | 'table' | 'hybrid';
+  descriptionSignals: string[];
   expandedKeywords: string[];
   generatedQueries: string[];
 };
@@ -203,6 +252,29 @@ export type DomainCatalogEntry = {
   title: string;
   shortDescription: string;
   keywords: string[];
+  aliases?: string[];
+  strongSignals?: string[];
+  supportSignals?: string[];
+  negativeSignals?: string[];
+  querySeeds?: string[];
+  reasonTemplate?: string;
+  modality?: 'text' | 'table' | 'hybrid';
+};
+
+export type TaskCatalogEntry = {
+  id: TaskSignal;
+  title: string;
+  aliases?: string[];
+  strongSignals?: string[];
+  supportSignals?: string[];
+  querySeeds?: string[];
+};
+
+export type ModalityCatalogEntry = {
+  id: ModalitySignal;
+  title: string;
+  aliases?: string[];
+  keywords?: string[];
 };
 
 export type KnowledgeCatalogEntry = {
@@ -212,6 +284,14 @@ export type KnowledgeCatalogEntry = {
   summary: string;
   kind: ExternalKnowledgeKind;
   tags: string[];
+  domainIds?: string[];
+  sourceUrl?: string;
+  publisher?: string;
+  retrievalHint?: string;
+  modality?: 'text' | 'table' | 'hybrid';
+  taskSignals?: TaskSignal[];
+  modalitySignals?: ModalitySignal[];
+  negativeTags?: string[];
 };
 
 export type DatasetCatalogEntry = {
@@ -223,4 +303,13 @@ export type DatasetCatalogEntry = {
   modality: string;
   licenseHint: string;
   tags: string[];
+  domainIds?: string[];
+  sourceUrl?: string;
+  providerDetail?: string;
+  publisher?: string;
+  retrievalHint?: string;
+  modalityType?: 'text' | 'table' | 'hybrid';
+  taskSignals?: TaskSignal[];
+  modalitySignals?: ModalitySignal[];
+  negativeTags?: string[];
 };
