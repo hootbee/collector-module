@@ -1,5 +1,4 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { CatalogConnectorsService } from '../connectors/catalog.connectors';
 import type {
   DiscoveryJobResultsResponse,
   DiscoveryJobStatusResponse,
@@ -7,6 +6,7 @@ import type {
   DomainRecommendationResponse,
 } from '../common/contracts';
 import { sleep } from '../common/text';
+import { DiscoveryOrchestratorService } from './discovery-orchestrator.service';
 import { DomainRecommendationService } from '../domain-recommendation/domain-recommendation.service';
 import { ProfilingService } from '../profiling/profiling.service';
 import { StoreService } from '../store/store.service';
@@ -17,7 +17,7 @@ export class DiscoveryService {
     private readonly storeService: StoreService,
     private readonly profilingService: ProfilingService,
     private readonly recommendationService: DomainRecommendationService,
-    private readonly connectorsService: CatalogConnectorsService,
+    private readonly discoveryOrchestratorService: DiscoveryOrchestratorService,
   ) {}
 
   async createJob(input: {
@@ -91,11 +91,12 @@ export class DiscoveryService {
         metadataColumns: input.metadataColumns,
         selectedDomains: input.selectedDomains,
       });
+      const orchestration = await this.discoveryOrchestratorService.execute(context);
 
       this.storeService.startJob(input.jobId, {
         stage: 'query expansion',
-        generatedQueries: context.generatedQueries,
-        expandedKeywords: context.expandedKeywords,
+        generatedQueries: orchestration.plan.datasetQueries,
+        expandedKeywords: orchestration.plan.mustInclude,
       });
 
       console.info(
@@ -110,30 +111,31 @@ export class DiscoveryService {
           modality: context.modality,
           featureColumns: context.featureColumns,
           textColumns: context.textColumns,
-          expandedKeywords: context.expandedKeywords,
-          generatedQueries: context.generatedQueries,
+          expandedKeywords: orchestration.plan.mustInclude,
+          generatedQueries: orchestration.plan.datasetQueries,
+          knowledgeQueries: orchestration.plan.knowledgeQueries,
+          mustAvoid: orchestration.plan.mustAvoid,
         })}`,
       );
 
-      const [knowledgeOutcome, datasetOutcome] = await Promise.all([
-        Promise.resolve(this.connectorsService.searchKnowledge(context)),
-        Promise.resolve(this.connectorsService.searchDatasets(context)),
-      ]);
-      const knowledgeItems = knowledgeOutcome.items;
-      const datasetItems = datasetOutcome.items;
-
       console.info(
-        `[DiscoveryService] knowledge ranking ${JSON.stringify(knowledgeOutcome.debug)}`,
+        `[DiscoveryService] knowledge candidate hits ${JSON.stringify(orchestration.knowledgeSearchDebug)}`,
       );
       console.info(
-        `[DiscoveryService] dataset ranking ${JSON.stringify(datasetOutcome.debug)}`,
+        `[DiscoveryService] dataset candidate hits ${JSON.stringify(orchestration.datasetSearchDebug)}`,
+      );
+      console.info(
+        `[DiscoveryService] knowledge ranking ${JSON.stringify(orchestration.knowledgeRankingDebug)}`,
+      );
+      console.info(
+        `[DiscoveryService] dataset ranking ${JSON.stringify(orchestration.datasetRankingDebug)}`,
       );
 
       this.storeService.updateJobStage(input.jobId, 'streaming candidates');
 
       await Promise.all([
-        this.streamKnowledge(input.jobId, knowledgeItems),
-        this.streamDatasets(input.jobId, datasetItems),
+        this.streamKnowledge(input.jobId, orchestration.knowledgeItems),
+        this.streamDatasets(input.jobId, orchestration.datasetItems),
       ]);
 
       this.storeService.completeJob(input.jobId);
