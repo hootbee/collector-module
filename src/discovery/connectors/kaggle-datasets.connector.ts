@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import Papa from 'papaparse';
 import { execFile as execFileCallback } from 'node:child_process';
 import { promisify } from 'node:util';
+import { tokenize, uniqueKeepOrder } from '../../common/text';
 import type { DiscoveryContext } from '../../common/contracts';
 import type { DiscoveryConnector } from './connector.interface';
 import {
@@ -55,14 +56,15 @@ export class KaggleDatasetsConnector implements DiscoveryConnector {
             id: `kaggle:${ref}`,
             name: title,
             provider: 'Kaggle',
-            providerDetail: ref,
-            description: this.pick(row, ['subtitle', 'title']) || `${title} dataset on Kaggle.`,
-            rowsHint: this.pick(row, ['size', 'files', 'fileCount']) || 'See Kaggle dataset page',
+            providerDetail: this.providerDetail(ref, row),
+            publisher: this.ownerLabel(ref),
+            description: this.description(title, query, row),
+            rowsHint: this.rowsHint(row),
             modality: this.inferModalityLabel(title, row),
             licenseHint: this.pick(row, ['licenseName', 'license']) || 'See Kaggle dataset page',
             sourceUrl: `https://www.kaggle.com/datasets/${ref}`,
-            retrievalHint: `Matched Kaggle query: ${query}`,
-            tags: [query, ref, title, this.pick(row, ['tags'])].filter(Boolean) as string[],
+            retrievalHint: `Matched Kaggle query: ${query}${this.popularitySuffix(row)}`,
+            tags: this.tags(query, ref, title, row),
           });
           const text = `${entry.name} ${entry.description} ${entry.provider} ${entry.providerDetail ?? ''} ${entry.modality}`;
           const { matchedQueries, matchedTerms } = buildQueryMatchSignals(
@@ -164,5 +166,64 @@ export class KaggleDatasetsConnector implements DiscoveryConnector {
       return 'time series';
     }
     return 'dataset';
+  }
+
+  private ownerLabel(ref: string): string {
+    const [owner] = ref.split('/');
+    return owner || 'Kaggle publisher';
+  }
+
+  private providerDetail(ref: string, row: KaggleRow): string {
+    return [
+      ref,
+      this.metricLabel('downloads', this.pick(row, ['downloadCount'])),
+      this.metricLabel('votes', this.pick(row, ['voteCount'])),
+      this.metricLabel('usability', this.pick(row, ['usabilityRating'])),
+    ]
+      .filter(Boolean)
+      .join(' | ');
+  }
+
+  private rowsHint(row: KaggleRow): string {
+    const size = this.pick(row, ['size']);
+    const files = this.pick(row, ['files', 'fileCount']);
+    return [size ? `Size ${size}` : '', files ? `Files ${files}` : 'See Kaggle dataset page']
+      .filter(Boolean)
+      .join(' | ');
+  }
+
+  private description(title: string, query: string, row: KaggleRow): string {
+    const subtitle = this.pick(row, ['subtitle']);
+    const popularity = this.popularitySuffix(row);
+    return subtitle || `${title}. Kaggle dataset matched for "${query}"${popularity}.`;
+  }
+
+  private popularitySuffix(row: KaggleRow): string {
+    const downloads = this.pick(row, ['downloadCount']);
+    const votes = this.pick(row, ['voteCount']);
+    const usability = this.pick(row, ['usabilityRating']);
+    const parts = [
+      downloads ? `${downloads} downloads` : '',
+      votes ? `${votes} votes` : '',
+      usability ? `usability ${usability}` : '',
+    ].filter(Boolean);
+    return parts.length > 0 ? ` (${parts.join(', ')})` : '';
+  }
+
+  private metricLabel(label: string, value: string): string {
+    return value ? `${label}=${value}` : '';
+  }
+
+  private tags(query: string, ref: string, title: string, row: KaggleRow): string[] {
+    return uniqueKeepOrder([
+      query,
+      ref,
+      title,
+      this.ownerLabel(ref),
+      ...tokenize(ref),
+      ...tokenize(title),
+      ...tokenize(query),
+      ...tokenize(this.pick(row, ['subtitle'])),
+    ]).slice(0, 24);
   }
 }

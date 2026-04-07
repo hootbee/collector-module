@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { uniqueKeepOrder } from '../../common/text';
 import type { DiscoveryContext } from '../../common/contracts';
 import type { DiscoveryConnector } from './connector.interface';
 import {
@@ -52,21 +53,26 @@ export class UciDatasetsConnector implements DiscoveryConnector {
 
       try {
         const html = await fetchText(url);
-        const parsed = this.parseDatasetCards(html).slice(0, perQueryLimit);
+        const parsed = this.parseDatasetCards(html).slice(0, perQueryLimit * 2);
         let count = 0;
 
         for (const item of parsed) {
+          const enriched = await this.enrichCard(item);
+          if (!this.isRelevantCard(enriched, context, plan)) {
+            continue;
+          }
+
           const entry = buildDatasetEntry({
-            id: `uci:${item.slug}`,
-            name: item.title,
+            id: `uci:${enriched.slug}`,
+            name: enriched.title,
             provider: 'UCI Machine Learning Repository',
-            description: item.description,
-            rowsHint: item.rowsHint,
-            modality: item.modality,
+            description: enriched.description,
+            rowsHint: enriched.rowsHint,
+            modality: enriched.modality,
             licenseHint: 'See UCI dataset page',
-            sourceUrl: item.sourceUrl,
+            sourceUrl: enriched.sourceUrl,
             retrievalHint: `Matched UCI search query: ${query}`,
-            tags: [query, ...item.tags],
+            tags: [query, ...enriched.tags],
           });
           const text = `${entry.name} ${entry.description} ${entry.provider} ${entry.providerDetail ?? ''} ${entry.modality}`;
           const { matchedQueries, matchedTerms } = buildQueryMatchSignals(
@@ -93,6 +99,9 @@ export class UciDatasetsConnector implements DiscoveryConnector {
             entry,
           });
           count += 1;
+          if (count >= perQueryLimit) {
+            break;
+          }
         }
 
         debug.push({
@@ -116,6 +125,31 @@ export class UciDatasetsConnector implements DiscoveryConnector {
     }
 
     return { hits, debug };
+  }
+
+  private async enrichCard(card: ParsedUciDatasetCard): Promise<ParsedUciDatasetCard> {
+    try {
+      const html = await fetchText(card.sourceUrl);
+      const pageText = collapseWhitespace(stripHtml(html)).slice(0, 4000);
+      const title = card.title;
+      const description = this.extractDescription(pageText, title);
+      const rowsHint = this.extractRowsHint(pageText);
+      const modality = this.extractModality(pageText);
+      const tags = uniqueKeepOrder([
+        ...card.tags,
+        ...pageText.split(/\s+/).filter(Boolean).slice(0, 80),
+      ]).slice(0, 40);
+
+      return {
+        ...card,
+        description: description.length > card.description.length ? description : card.description,
+        rowsHint: rowsHint !== 'See UCI dataset page' ? rowsHint : card.rowsHint,
+        modality,
+        tags,
+      };
+    } catch {
+      return card;
+    }
   }
 
   private parseDatasetCards(html: string): ParsedUciDatasetCard[] {
@@ -174,5 +208,105 @@ export class UciDatasetsConnector implements DiscoveryConnector {
       return 'text corpus';
     }
     return 'tabular dataset';
+  }
+
+  private isRelevantCard(card: ParsedUciDatasetCard, context: DiscoveryContext, plan: DiscoveryPlan): boolean {
+    const titleAndDescription = `${card.title} ${card.description}`.toLowerCase();
+    const combined = `${titleAndDescription} ${card.tags.join(' ')}`.toLowerCase();
+
+    if (context.modality === 'text' || context.modalitySignals.includes('text')) {
+      const strongTextSignals = [
+        'text',
+        'language',
+        'document',
+        'corpus',
+        'authorship',
+        'author',
+        'essay',
+        'review',
+        'article',
+        'prompt',
+        'response',
+        'question',
+        'answer',
+        'news',
+        'sentiment',
+        'spam',
+        'chat',
+        'nlp',
+        'intent',
+        'clinc',
+      ];
+      const highConfidenceTextSignals = [
+        'authorship',
+        'author',
+        'essay',
+        'review',
+        'article',
+        'prompt',
+        'response',
+        'question',
+        'answer',
+        'chat',
+        'nlp',
+        'intent',
+        'clinc',
+        'corpus',
+        'document',
+      ];
+      const negativeTextSignals = [
+        'clinical',
+        'patient',
+        'surgery',
+        'caesarian',
+        'cancer',
+        'tumor',
+        'hospital',
+        'drug',
+        'diagnosis',
+        'thoracic',
+        'hepatitis',
+        'biomedical',
+        'image',
+        'vision',
+        'pixel',
+        'cifar',
+        'imagenet',
+        'object detection',
+        'segmentation',
+        'caesarean',
+      ];
+
+      const positiveCount = strongTextSignals.filter((signal) => combined.includes(signal)).length;
+      const highConfidenceCount = highConfidenceTextSignals.filter((signal) =>
+        titleAndDescription.includes(signal),
+      ).length;
+      const negativeCount = negativeTextSignals.filter((signal) => combined.includes(signal)).length;
+      const queryOverlap = plan.mustInclude.filter((term) => combined.includes(term.toLowerCase())).length;
+
+      if (highConfidenceCount === 0 && positiveCount < 2) {
+        return false;
+      }
+      if (negativeCount > 0 && highConfidenceCount === 0) {
+        return false;
+      }
+      if (negativeCount >= 2 && positiveCount < 3 && queryOverlap < 2) {
+        return false;
+      }
+    }
+
+    if (context.taskSignals.includes('time-series-forecasting')) {
+      const hasForecastSignal =
+        combined.includes('time series') ||
+        combined.includes('forecast') ||
+        combined.includes('stock') ||
+        combined.includes('price') ||
+        combined.includes('market');
+      if (!hasForecastSignal) {
+        return false;
+      }
+    }
+
+    return true;
   }
 }

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { tokenize } from '../../common/text';
+import { tokenize, uniqueKeepOrder } from '../../common/text';
 import type { DiscoveryContext } from '../../common/contracts';
 import type { DiscoveryConnector } from './connector.interface';
 import {
@@ -51,75 +51,90 @@ export class HuggingFaceDatasetsConnector implements DiscoveryConnector {
     const hits: DatasetDiscoveryHit[] = [];
     const debug: DiscoverySearchOutcome<DatasetDiscoveryHit>['debug'] = [];
     const limit = Math.max(2, Math.min(envNumber('DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE', 10), 10));
+    const seenIds = new Set<string>();
 
     for (const query of queries) {
-      const url = new URL('https://huggingface.co/api/datasets');
-      url.searchParams.set('search', query);
-      url.searchParams.set('limit', String(limit));
-      url.searchParams.set('full', 'true');
-
       try {
+        let count = 0;
+        const triedVariants: string[] = [];
+        const queryVariants = this.queryVariants(query, context);
         const headers: HeadersInit = {};
         if (process.env.HF_TOKEN?.trim()) {
           headers.Authorization = `Bearer ${process.env.HF_TOKEN.trim()}`;
         }
 
-        const response = await fetchJson<HuggingFaceDataset[]>(url.toString(), { headers });
-        let count = 0;
+        for (const variant of queryVariants) {
+          triedVariants.push(variant);
+          const url = new URL('https://huggingface.co/api/datasets');
+          url.searchParams.set('search', variant);
+          url.searchParams.set('limit', String(limit));
+          url.searchParams.set('full', 'true');
 
-        for (const item of response.slice(0, limit)) {
-          const id = item.id?.trim();
-          if (!id) {
+          const response = await fetchJson<HuggingFaceDataset[]>(url.toString(), { headers });
+          if (response.length === 0) {
             continue;
           }
-          const tags = this.datasetTags(item, query);
-          const title = item.cardData?.pretty_name?.trim() || id;
-          const description = item.description?.trim() || `${title} dataset on Hugging Face Hub.`;
-          const entry = buildDatasetEntry({
-            id: `hf:${id}`,
-            name: title,
-            provider: 'Hugging Face',
-            providerDetail: id,
-            description,
-            rowsHint: this.rowsHint(item),
-            modality: this.modalityLabel(tags),
-            licenseHint: this.licenseHint(item),
-            sourceUrl: `https://huggingface.co/datasets/${id}`,
-            retrievalHint: `Matched Hugging Face search query: ${query}`,
-            tags,
-          });
-          const text = `${entry.name} ${entry.description} ${entry.provider} ${entry.providerDetail ?? ''} ${entry.modality}`;
-          const { matchedQueries, matchedTerms } = buildQueryMatchSignals(
-            text,
-            entry.tags,
-            plan.datasetQueries,
-            plan.mustInclude,
-          );
 
-          hits.push({
-            id: entry.id,
-            kind: 'dataset',
-            connector: 'huggingface',
-            title: entry.name,
-            text,
-            tags: entry.tags,
-            domainIds: entry.domainIds ?? [],
-            taskSignals: entry.taskSignals ?? [],
-            modalitySignals: entry.modalitySignals ?? [],
-            modality: entry.modalityType ?? (context.modality === 'text' ? 'text' : 'table'),
-            negativeTags: entry.negativeTags ?? [],
-            matchedQueries,
-            matchedTerms,
-            entry,
-          });
-          count += 1;
+          for (const item of response.slice(0, limit)) {
+            const id = item.id?.trim();
+            if (!id || seenIds.has(id)) {
+              continue;
+            }
+            seenIds.add(id);
+            const tags = this.datasetTags(item, variant);
+            const title = item.cardData?.pretty_name?.trim() || id;
+            const description = item.description?.trim() || `${title} dataset on Hugging Face Hub.`;
+            const entry = buildDatasetEntry({
+              id: `hf:${id}`,
+              name: title,
+              provider: 'Hugging Face',
+              providerDetail: [id, this.authorLabel(item)].filter(Boolean).join(' | '),
+              publisher: this.authorLabel(item),
+              description,
+              rowsHint: this.rowsHint(item),
+              modality: this.modalityLabel(tags),
+              licenseHint: this.licenseHint(item),
+              sourceUrl: `https://huggingface.co/datasets/${id}`,
+              retrievalHint: `Matched Hugging Face query "${variant}" from base "${query}"`,
+              tags,
+            });
+            const text = `${entry.name} ${entry.description} ${entry.provider} ${entry.providerDetail ?? ''} ${entry.modality}`;
+            const { matchedQueries, matchedTerms } = buildQueryMatchSignals(
+              text,
+              entry.tags,
+              plan.datasetQueries,
+              plan.mustInclude,
+            );
+
+            hits.push({
+              id: entry.id,
+              kind: 'dataset',
+              connector: 'huggingface',
+              title: entry.name,
+              text,
+              tags: entry.tags,
+              domainIds: entry.domainIds ?? [],
+              taskSignals: entry.taskSignals ?? [],
+              modalitySignals: entry.modalitySignals ?? [],
+              modality: entry.modalityType ?? (context.modality === 'text' ? 'text' : 'table'),
+              negativeTags: entry.negativeTags ?? [],
+              matchedQueries,
+              matchedTerms,
+              entry,
+            });
+            count += 1;
+          }
+
+          if (count > 0) {
+            break;
+          }
         }
 
         debug.push({
           id: query,
           connector: 'huggingface',
           matchedQueries: [query],
-          matchedTerms: [],
+          matchedTerms: triedVariants.slice(0, 5),
           status: 'ok',
           count,
         });
@@ -143,6 +158,8 @@ export class HuggingFaceDatasetsConnector implements DiscoveryConnector {
       ...new Set([
         ...((item.tags ?? []).slice(0, 16)),
         ...tokenize(item.id ?? ''),
+        ...tokenize(item.author ?? ''),
+        ...tokenize(item.cardData?.pretty_name ?? ''),
         ...tokenize(item.description ?? ''),
         ...tokenize(query),
       ]),
@@ -184,9 +201,82 @@ export class HuggingFaceDatasetsConnector implements DiscoveryConnector {
     if (set.has('text-classification') || set.has('task_categories:text-classification') || set.has('text')) {
       return 'text corpus';
     }
+    if (
+      set.has('question-answering') ||
+      set.has('task_categories:question-answering') ||
+      set.has('summarization') ||
+      set.has('task_categories:token-classification')
+    ) {
+      return 'document corpus';
+    }
     if (set.has('time-series') || set.has('task_categories:time-series-forecasting')) {
       return 'time series';
     }
     return 'dataset';
+  }
+
+  private authorLabel(item: HuggingFaceDataset): string {
+    return item.author?.trim() || '';
+  }
+
+  private queryVariants(query: string, context: DiscoveryContext): string[] {
+    const lowered = query.toLowerCase();
+    const variants = uniqueKeepOrder([
+      query,
+      this.trimDatasetSuffix(query),
+      this.compressQuery(query),
+      ...(context.modality === 'text'
+        ? [
+            'generated text detection',
+            'ai generated text',
+            'human vs ai text',
+            'text classification',
+            'authorship attribution',
+            'content authenticity',
+            'hc3',
+          ]
+        : []),
+      ...(context.taskSignals.includes('time-series-forecasting')
+        ? [
+            'stock forecasting',
+            'ohlcv',
+            'time series forecasting',
+            'market prediction',
+          ]
+        : []),
+    ])
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .filter((value) => value.length >= 3);
+
+    return variants.filter((value, index) => {
+      if (index === 0) {
+        return true;
+      }
+      return value.toLowerCase() !== lowered;
+    });
+  }
+
+  private trimDatasetSuffix(query: string): string {
+    return query
+      .replace(/\b(dataset|benchmark|corpus|with metadata|with prompts and content|with topic and language metadata)\b/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private compressQuery(query: string): string {
+    const stopwords = new Set([
+      'dataset',
+      'benchmark',
+      'corpus',
+      'with',
+      'and',
+      'metadata',
+      'using',
+      'for',
+      'the',
+    ]);
+    const tokens = tokenize(query).filter((token) => !stopwords.has(token));
+    return uniqueKeepOrder(tokens).slice(0, 4).join(' ');
   }
 }
