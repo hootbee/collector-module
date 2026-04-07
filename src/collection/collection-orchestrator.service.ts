@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { CollectionSourceId } from '../common/contracts';
-import { DiscoveryConnectorRegistryService } from '../discovery/connectors/connector-registry.service';
+import { CollectionConnectorRegistryService } from './connectors/connector-registry.service';
 import { CollectionLlmService } from './collection-llm.service';
 import { CollectionNormalizerService } from './collection-normalizer.service';
 import { CollectionPlannerService, type CollectionRequest } from './collection-planner.service';
@@ -9,7 +9,7 @@ import { CollectionPlannerService, type CollectionRequest } from './collection-p
 export class CollectionOrchestratorService {
   constructor(
     private readonly plannerService: CollectionPlannerService,
-    private readonly connectorsService: DiscoveryConnectorRegistryService,
+    private readonly connectorsService: CollectionConnectorRegistryService,
     private readonly normalizerService: CollectionNormalizerService,
     private readonly llmService: CollectionLlmService,
   ) {}

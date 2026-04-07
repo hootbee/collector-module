@@ -1,14 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import type { CollectionSourceId, DiscoveryContext } from '../../common/contracts';
-import { CatalogConnectorsService } from '../../connectors/catalog.connectors';
+import { SeedCatalogConnector } from './seed-catalog.connector';
 import type { DiscoveryConnector } from './connector.interface';
-import type { DiscoveryPlan } from '../types/discovery-plan';
+import type { DiscoveryPlan } from '../types/collection-plan';
 import type {
   DatasetDiscoveryHit,
   DiscoverySearchDebug,
   DiscoverySearchOutcome,
   KnowledgeDiscoveryHit,
-} from '../types/discovery-hit';
+} from '../types/collection-hit';
 import { envFlag } from './connector.utils';
 import { HuggingFaceDatasetsConnector } from './huggingface-datasets.connector';
 import { UciDatasetsConnector } from './uci-datasets.connector';
@@ -18,9 +18,9 @@ import { CrossrefKnowledgeConnector } from './crossref-knowledge.connector';
 import { OpenMlDatasetsConnector } from './openml-datasets.connector';
 
 @Injectable()
-export class DiscoveryConnectorRegistryService {
+export class CollectionConnectorRegistryService {
   constructor(
-    private readonly seedConnector: CatalogConnectorsService,
+    private readonly seedConnector: SeedCatalogConnector,
     private readonly huggingFaceConnector: HuggingFaceDatasetsConnector,
     private readonly uciConnector: UciDatasetsConnector,
     private readonly kaggleConnector: KaggleDatasetsConnector,
@@ -62,25 +62,25 @@ export class DiscoveryConnectorRegistryService {
   private enabledConnectors(requestedSources?: CollectionSourceId[]): DiscoveryConnector[] {
     const requested = requestedSources ? new Set(requestedSources) : null;
     const connectors: DiscoveryConnector[] = [];
-    if (envFlag('DISCOVERY_ENABLE_SEED_CONNECTOR', true) && (!requested || requested.has('seed-catalog'))) {
+    if (envFlag(['COLLECTION_ENABLE_SEED_CONNECTOR', 'DISCOVERY_ENABLE_SEED_CONNECTOR'], true) && (!requested || requested.has('seed-catalog'))) {
       connectors.push(this.seedConnector);
     }
-    if (envFlag('DISCOVERY_ENABLE_HF_CONNECTOR') && (!requested || requested.has('huggingface'))) {
+    if (envFlag(['COLLECTION_ENABLE_HF_CONNECTOR', 'DISCOVERY_ENABLE_HF_CONNECTOR']) && (!requested || requested.has('huggingface'))) {
       connectors.push(this.huggingFaceConnector);
     }
-    if (envFlag('DISCOVERY_ENABLE_UCI_CONNECTOR') && (!requested || requested.has('uci'))) {
+    if (envFlag(['COLLECTION_ENABLE_UCI_CONNECTOR', 'DISCOVERY_ENABLE_UCI_CONNECTOR']) && (!requested || requested.has('uci'))) {
       connectors.push(this.uciConnector);
     }
-    if (envFlag('DISCOVERY_ENABLE_KAGGLE_CONNECTOR') && (!requested || requested.has('kaggle'))) {
+    if (envFlag(['COLLECTION_ENABLE_KAGGLE_CONNECTOR', 'DISCOVERY_ENABLE_KAGGLE_CONNECTOR']) && (!requested || requested.has('kaggle'))) {
       connectors.push(this.kaggleConnector);
     }
-    if (envFlag('DISCOVERY_ENABLE_SERPAPI_CONNECTOR') && (!requested || requested.has('serpapi'))) {
+    if (envFlag(['COLLECTION_ENABLE_SERPAPI_CONNECTOR', 'DISCOVERY_ENABLE_SERPAPI_CONNECTOR']) && (!requested || requested.has('serpapi'))) {
       connectors.push(this.serpApiConnector);
     }
-    if (envFlag('DISCOVERY_ENABLE_CROSSREF_CONNECTOR') && (!requested || requested.has('crossref'))) {
+    if (envFlag(['COLLECTION_ENABLE_CROSSREF_CONNECTOR', 'DISCOVERY_ENABLE_CROSSREF_CONNECTOR']) && (!requested || requested.has('crossref'))) {
       connectors.push(this.crossrefConnector);
     }
-    if (envFlag('DISCOVERY_ENABLE_OPENML_CONNECTOR') && (!requested || requested.has('openml'))) {
+    if (envFlag(['COLLECTION_ENABLE_OPENML_CONNECTOR', 'DISCOVERY_ENABLE_OPENML_CONNECTOR']) && (!requested || requested.has('openml'))) {
       connectors.push(this.openMlConnector);
     }
     return connectors;

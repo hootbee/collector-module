@@ -5,7 +5,7 @@ import type {
   ExternalDatasetItem,
   ExternalKnowledgeItem,
 } from '../common/contracts';
-import type { DatasetDiscoveryHit, KnowledgeDiscoveryHit } from '../discovery/types/discovery-hit';
+import type { DatasetDiscoveryHit, KnowledgeDiscoveryHit } from './types/collection-hit';
 
 @Injectable()
 export class CollectionNormalizerService {

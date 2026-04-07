@@ -1,10 +1,10 @@
 import type { DiscoveryContext } from '../../common/contracts';
-import type { DiscoveryPlan } from '../types/discovery-plan';
+import type { DiscoveryPlan } from '../types/collection-plan';
 import type {
   DatasetDiscoveryHit,
   DiscoverySearchOutcome,
   KnowledgeDiscoveryHit,
-} from '../types/discovery-hit';
+} from '../types/collection-hit';
 
 export interface DiscoveryConnector {
   searchKnowledgeHits(

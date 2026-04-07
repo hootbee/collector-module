@@ -11,12 +11,12 @@ import {
   truncateText,
   envNumber,
 } from './connector.utils';
-import { knowledgeQueriesForSource, type DiscoveryPlan } from '../types/discovery-plan';
+import { knowledgeQueriesForSource, type DiscoveryPlan } from '../types/collection-plan';
 import type {
   DatasetDiscoveryHit,
   DiscoverySearchOutcome,
   KnowledgeDiscoveryHit,
-} from '../types/discovery-hit';
+} from '../types/collection-hit';
 
 type CrossrefWork = {
   DOI?: string;
@@ -56,7 +56,10 @@ export class CrossrefKnowledgeConnector implements DiscoveryConnector {
     const queries = sourceQueries.slice(0, 3);
     const hits: KnowledgeDiscoveryHit[] = [];
     const debug: DiscoverySearchOutcome<KnowledgeDiscoveryHit>['debug'] = [];
-    const rows = Math.max(2, Math.min(envNumber('DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE', 10), 8));
+    const rows = Math.max(
+      2,
+      Math.min(envNumber(['COLLECTION_CONNECTOR_LIMIT_PER_SOURCE', 'DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE'], 10), 8),
+    );
 
     for (const query of queries) {
       const url = new URL('https://api.crossref.org/works');

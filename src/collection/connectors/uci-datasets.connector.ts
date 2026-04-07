@@ -11,12 +11,12 @@ import {
   fetchText,
   stripHtml,
 } from './connector.utils';
-import { datasetQueriesForSource, type DiscoveryPlan } from '../types/discovery-plan';
+import { datasetQueriesForSource, type DiscoveryPlan } from '../types/collection-plan';
 import type {
   DatasetDiscoveryHit,
   DiscoverySearchOutcome,
   KnowledgeDiscoveryHit,
-} from '../types/discovery-hit';
+} from '../types/collection-hit';
 
 type ParsedUciDatasetCard = {
   slug: string;
@@ -49,7 +49,10 @@ export class UciDatasetsConnector implements DiscoveryConnector {
     const queries = sourceQueries.slice(0, 2);
     const hits: DatasetDiscoveryHit[] = [];
     const debug: DiscoverySearchOutcome<DatasetDiscoveryHit>['debug'] = [];
-    const perQueryLimit = Math.max(2, Math.min(envNumber('DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE', 10), 6));
+    const perQueryLimit = Math.max(
+      2,
+      Math.min(envNumber(['COLLECTION_CONNECTOR_LIMIT_PER_SOURCE', 'DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE'], 10), 6),
+    );
 
     for (const query of queries) {
       const url = `https://archive.ics.uci.edu/datasets?search=${encodeURIComponent(query)}`;

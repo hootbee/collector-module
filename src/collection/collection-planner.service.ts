@@ -11,7 +11,7 @@ import type {
 } from '../common/contracts';
 import { nowIso } from '../common/time';
 import { tokenize, uniqueKeepOrder } from '../common/text';
-import type { DiscoveryPlan } from '../discovery/types/discovery-plan';
+import type { DiscoveryPlan } from './types/collection-plan';
 
 export type CollectionRequest = {
   query: string;

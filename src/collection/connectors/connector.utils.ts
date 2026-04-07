@@ -7,25 +7,35 @@ import type {
 } from '../../common/contracts';
 import { domainCatalog, modalityCatalog, taskCatalog } from '../../common/catalog';
 import { tokenize, uniqueKeepOrder } from '../../common/text';
-import { connectorMetadata } from '../discovery-ranking.config';
+import { connectorMetadata } from './connector.config';
 
 type ModalityType = 'text' | 'table' | 'hybrid';
 
-export function envFlag(name: string, defaultValue = false): boolean {
-  const raw = process.env[name];
+export function envFlag(name: string | string[], defaultValue = false): boolean {
+  const keys = Array.isArray(name) ? name : [name];
+  const raw = keys
+    .map((key) => process.env[key])
+    .find((value) => value != null && value.trim() !== '');
   if (raw == null || raw.trim() === '') {
     return defaultValue;
   }
   return ['1', 'true', 'yes', 'on'].includes(raw.trim().toLowerCase());
 }
 
-export function envNumber(name: string, defaultValue: number): number {
-  const raw = Number(process.env[name] ?? defaultValue);
+export function envNumber(name: string | string[], defaultValue: number): number {
+  const keys = Array.isArray(name) ? name : [name];
+  const value = keys
+    .map((key) => process.env[key])
+    .find((entry) => entry != null && entry.trim() !== '');
+  const raw = Number(value ?? defaultValue);
   return Number.isFinite(raw) && raw > 0 ? raw : defaultValue;
 }
 
 export function buildUserAgent(): string {
-  const base = process.env.DISCOVERY_FETCHER_USER_AGENT?.trim() || 'stage-one-backend/0.1';
+  const base =
+    process.env.COLLECTION_FETCHER_USER_AGENT?.trim() ||
+    process.env.DISCOVERY_FETCHER_USER_AGENT?.trim() ||
+    'stage-one-backend/0.1';
   const mailto = process.env.CROSSREF_MAILTO?.trim();
   return mailto ? `${base} (mailto:${mailto})` : base;
 }
@@ -334,8 +344,11 @@ function inferKnowledgeKind(
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
-  const timeoutMs = envNumber('DISCOVERY_HTTP_TIMEOUT_MS', 8000);
-  const retryCount = Math.max(0, Math.min(envNumber('DISCOVERY_HTTP_RETRY_COUNT', 2), 3));
+  const timeoutMs = envNumber(['COLLECTION_HTTP_TIMEOUT_MS', 'DISCOVERY_HTTP_TIMEOUT_MS'], 8000);
+  const retryCount = Math.max(
+    0,
+    Math.min(envNumber(['COLLECTION_HTTP_RETRY_COUNT', 'DISCOVERY_HTTP_RETRY_COUNT'], 2), 3),
+  );
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= retryCount; attempt += 1) {

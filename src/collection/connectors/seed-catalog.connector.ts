@@ -1,25 +1,25 @@
 import { Injectable } from '@nestjs/common';
-import { datasetCatalog, knowledgeCatalog } from '../common/catalog';
-import type { DiscoveryContext } from '../common/contracts';
+import { datasetCatalog, knowledgeCatalog } from '../../common/catalog';
+import type { DiscoveryContext } from '../../common/contracts';
 import {
   buildQueryMatchSignals,
   connectorSearchMetadata,
   inferModalitySignals,
-} from '../discovery/connectors/connector.utils';
-import type { DiscoveryConnector } from '../discovery/connectors/connector.interface';
+} from './connector.utils';
+import type { DiscoveryConnector } from './connector.interface';
 import {
   datasetQueriesForSource,
   knowledgeQueriesForSource,
   type DiscoveryPlan,
-} from '../discovery/types/discovery-plan';
+} from '../types/collection-plan';
 import type {
   DatasetDiscoveryHit,
   DiscoverySearchOutcome,
   KnowledgeDiscoveryHit,
-} from '../discovery/types/discovery-hit';
+} from '../types/collection-hit';
 
 @Injectable()
-export class CatalogConnectorsService implements DiscoveryConnector {
+export class SeedCatalogConnector implements DiscoveryConnector {
   async searchKnowledgeHits(
     plan: DiscoveryPlan,
     context: DiscoveryContext,

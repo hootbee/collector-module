@@ -9,12 +9,12 @@ import {
   envNumber,
   fetchJson,
 } from './connector.utils';
-import { knowledgeQueriesForSource, type DiscoveryPlan } from '../types/discovery-plan';
+import { knowledgeQueriesForSource, type DiscoveryPlan } from '../types/collection-plan';
 import type {
   DatasetDiscoveryHit,
   DiscoverySearchOutcome,
   KnowledgeDiscoveryHit,
-} from '../types/discovery-hit';
+} from '../types/collection-hit';
 
 type SerpOrganicResult = {
   title?: string;
@@ -63,7 +63,10 @@ export class SerpApiKnowledgeConnector implements DiscoveryConnector {
 
     const hits: KnowledgeDiscoveryHit[] = [];
     const debug: DiscoverySearchOutcome<KnowledgeDiscoveryHit>['debug'] = [];
-    const limit = Math.max(2, Math.min(envNumber('DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE', 10), 8));
+    const limit = Math.max(
+      2,
+      Math.min(envNumber(['COLLECTION_CONNECTOR_LIMIT_PER_SOURCE', 'DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE'], 10), 8),
+    );
 
     const sourceQueries = knowledgeQueriesForSource(plan, 'serpapi');
     for (const query of sourceQueries.slice(0, 3)) {

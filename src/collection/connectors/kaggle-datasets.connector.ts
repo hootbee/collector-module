@@ -12,12 +12,12 @@ import {
   connectorSearchMetadata,
   envNumber,
 } from './connector.utils';
-import { datasetQueriesForSource, type DiscoveryPlan } from '../types/discovery-plan';
+import { datasetQueriesForSource, type DiscoveryPlan } from '../types/collection-plan';
 import type {
   DatasetDiscoveryHit,
   DiscoverySearchOutcome,
   KnowledgeDiscoveryHit,
-} from '../types/discovery-hit';
+} from '../types/collection-hit';
 
 const execFile = promisify(execFileCallback);
 
@@ -141,14 +141,17 @@ export class KaggleDatasetsConnector implements DiscoveryConnector {
 
   private async listDatasets(query: string): Promise<KaggleRow[]> {
     const cliPath = process.env.KAGGLE_CLI_PATH?.trim() || 'kaggle';
-    const limit = Math.max(2, Math.min(envNumber('DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE', 10), 10));
+    const limit = Math.max(
+      2,
+      Math.min(envNumber(['COLLECTION_CONNECTOR_LIMIT_PER_SOURCE', 'DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE'], 10), 10),
+    );
     const env = {
       ...process.env,
     };
 
     const { stdout } = await execFile(cliPath, ['datasets', 'list', '-s', query, '--csv'], {
       env,
-      timeout: envNumber('DISCOVERY_HTTP_TIMEOUT_MS', 8000),
+      timeout: envNumber(['COLLECTION_HTTP_TIMEOUT_MS', 'DISCOVERY_HTTP_TIMEOUT_MS'], 8000),
       maxBuffer: 2 * 1024 * 1024,
     });
 

@@ -9,12 +9,12 @@ import {
   envNumber,
   fetchJson,
 } from './connector.utils';
-import { datasetQueriesForSource, type DiscoveryPlan } from '../types/discovery-plan';
+import { datasetQueriesForSource, type DiscoveryPlan } from '../types/collection-plan';
 import type {
   DatasetDiscoveryHit,
   DiscoverySearchOutcome,
   KnowledgeDiscoveryHit,
-} from '../types/discovery-hit';
+} from '../types/collection-hit';
 
 type HuggingFaceDataset = {
   id?: string;
@@ -53,7 +53,10 @@ export class HuggingFaceDatasetsConnector implements DiscoveryConnector {
     const queries = sourceQueries.slice(0, 3);
     const hits: DatasetDiscoveryHit[] = [];
     const debug: DiscoverySearchOutcome<DatasetDiscoveryHit>['debug'] = [];
-    const limit = Math.max(2, Math.min(envNumber('DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE', 10), 10));
+    const limit = Math.max(
+      2,
+      Math.min(envNumber(['COLLECTION_CONNECTOR_LIMIT_PER_SOURCE', 'DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE'], 10), 10),
+    );
     const seenIds = new Set<string>();
 
     for (const query of queries) {

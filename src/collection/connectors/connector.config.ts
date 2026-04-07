@@ -1,4 +1,4 @@
-import type { DiscoverySourceType } from './types/discovery-hit';
+import type { DiscoverySourceType } from '../types/collection-hit';
 
 export const rankingWeights = {
   domainMatch: 8.5,
