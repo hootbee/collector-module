@@ -91,6 +91,8 @@ export class CollectionService {
         knowledgeQueries: orchestration.plan.knowledgeQueries,
         mustInclude: orchestration.plan.mustInclude,
         mustAvoid: orchestration.plan.mustAvoid,
+        llmPlanRaw: orchestration.llmPlanRaw,
+        llmPlan: orchestration.llmPlan,
       });
 
       console.info(
@@ -108,6 +110,17 @@ export class CollectionService {
           mustAvoid: orchestration.plan.mustAvoid,
         })}`,
       );
+      if (orchestration.llmPlan) {
+        console.info(
+          `[CollectionService] collection llm plan ${JSON.stringify({
+            jobId: input.jobId,
+            canonicalIntent: orchestration.llmPlan.canonicalIntent,
+            taskSignals: orchestration.llmPlan.taskSignals,
+            modalitySignals: orchestration.llmPlan.modalitySignals,
+            notes: orchestration.llmPlan.notes,
+          })}`,
+        );
+      }
       console.info(
         `[CollectionService] connector status ${JSON.stringify(orchestration.connectorStatuses)}`,
       );

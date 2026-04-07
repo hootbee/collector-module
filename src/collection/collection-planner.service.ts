@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type {
   CollectionKind,
+  CollectionLlmPlan,
   CollectionSourceId,
   DatasetRecord,
   DiscoveryContext,
@@ -20,6 +21,7 @@ export type CollectionRequest = {
   modalitySignals?: ModalitySignal[];
   mustInclude?: string[];
   mustAvoid?: string[];
+  llmPlan?: CollectionLlmPlan | null;
 };
 
 const stopwords = new Set([
@@ -40,9 +42,13 @@ export class CollectionPlannerService {
   build(request: CollectionRequest): { context: DiscoveryContext; plan: DiscoveryPlan } {
     const inferredTaskSignals = request.taskSignals?.length
       ? [...request.taskSignals]
+      : request.llmPlan?.taskSignals?.length
+        ? [...request.llmPlan.taskSignals]
       : this.inferTaskSignals(request.query);
     const inferredModalitySignals = request.modalitySignals?.length
       ? [...request.modalitySignals]
+      : request.llmPlan?.modalitySignals?.length
+        ? [...request.llmPlan.modalitySignals]
       : this.inferModalitySignals(request.query);
     const modality: DiscoveryContext['modality'] = inferredModalitySignals.includes('text')
       ? 'text'
@@ -52,9 +58,13 @@ export class CollectionPlannerService {
     const compressedQuery = this.compressQuery(request.query);
     const mustInclude = uniqueKeepOrder([
       ...(request.mustInclude ?? []).map((value) => value.trim()).filter(Boolean),
+      ...(request.llmPlan?.mustInclude ?? []).map((value) => value.trim()).filter(Boolean),
       ...tokenize(request.query).slice(0, 8),
     ]);
-    const mustAvoid = uniqueKeepOrder((request.mustAvoid ?? []).map((value) => value.trim()).filter(Boolean));
+    const mustAvoid = uniqueKeepOrder([
+      ...(request.mustAvoid ?? []).map((value) => value.trim()).filter(Boolean),
+      ...(request.llmPlan?.mustAvoid ?? []).map((value) => value.trim()).filter(Boolean),
+    ]);
 
     const canonicalDatasetQueries = uniqueKeepOrder(
       [request.query, compressedQuery, ...this.datasetFallbackQueries(request.query, inferredTaskSignals, inferredModalitySignals)]
@@ -72,36 +82,42 @@ export class CollectionPlannerService {
     ).slice(0, 8);
 
     const datasetSourceQueries: DiscoveryPlan['datasetSourceQueries'] = {
-      'seed-catalog': canonicalDatasetQueries.slice(0, 5),
+      'seed-catalog': this.mergeSourceQueries(canonicalDatasetQueries.slice(0, 5), request.llmPlan?.datasetSourceQueries?.['seed-catalog']),
       huggingface: uniqueKeepOrder([
         ...canonicalDatasetQueries,
         ...this.huggingFaceQueries(request.query, compressedQuery, inferredModalitySignals, inferredTaskSignals),
+        ...(request.llmPlan?.datasetSourceQueries?.huggingface ?? []),
       ]).slice(0, 8),
       openml: uniqueKeepOrder([
         compressedQuery,
         ...this.shortQueryVariants(compressedQuery),
+        ...(request.llmPlan?.datasetSourceQueries?.openml ?? []),
       ]).slice(0, 6),
       uci: uniqueKeepOrder([
         compressedQuery,
         ...this.shortQueryVariants(compressedQuery),
+        ...(request.llmPlan?.datasetSourceQueries?.uci ?? []),
       ]).slice(0, 6),
       kaggle: uniqueKeepOrder([
         `${request.query} dataset`,
         `${compressedQuery} dataset`,
         request.query,
         compressedQuery,
+        ...(request.llmPlan?.datasetSourceQueries?.kaggle ?? []),
       ]).slice(0, 8),
     };
 
     const knowledgeSourceQueries: DiscoveryPlan['knowledgeSourceQueries'] = {
-      'seed-catalog': canonicalKnowledgeQueries.slice(0, 5),
+      'seed-catalog': this.mergeSourceQueries(canonicalKnowledgeQueries.slice(0, 5), request.llmPlan?.knowledgeSourceQueries?.['seed-catalog']),
       serpapi: uniqueKeepOrder([
         ...canonicalKnowledgeQueries,
         `${request.query} overview`,
+        ...(request.llmPlan?.knowledgeSourceQueries?.serpapi ?? []),
       ]).slice(0, 8),
       crossref: uniqueKeepOrder([
         ...this.shortQueryVariants(compressedQuery).map((value) => `${value} paper`),
         `${compressedQuery} benchmark`,
+        ...(request.llmPlan?.knowledgeSourceQueries?.crossref ?? []),
       ]).slice(0, 8),
     };
 
@@ -125,6 +141,10 @@ export class CollectionPlannerService {
       context: this.buildContext(request.query, inferredTaskSignals, inferredModalitySignals, modality, mustInclude),
       plan,
     };
+  }
+
+  private mergeSourceQueries(baseline: string[], llmQueries?: string[]): string[] {
+    return uniqueKeepOrder([...(llmQueries ?? []), ...baseline]).slice(0, 8);
   }
 
   private buildContext(

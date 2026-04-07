@@ -206,6 +206,17 @@ export type CollectionConnectorStatus = {
   errors: string[];
 };
 
+export type CollectionLlmPlan = {
+  canonicalIntent: string;
+  taskSignals: TaskSignal[];
+  modalitySignals: ModalitySignal[];
+  mustInclude: string[];
+  mustAvoid: string[];
+  datasetSourceQueries: Partial<Record<CollectionSourceId, string[]>>;
+  knowledgeSourceQueries: Partial<Record<CollectionSourceId, string[]>>;
+  notes: string[];
+};
+
 export type CollectedKnowledgeHit = {
   id: string;
   connector: CollectionSourceId;
@@ -280,6 +291,8 @@ export type CollectionJobResultsResponse = {
   knowledgeQueries: string[];
   mustInclude: string[];
   mustAvoid: string[];
+  llmPlanRaw: string | null;
+  llmPlan: CollectionLlmPlan | null;
   connectorStatuses: CollectionConnectorStatus[];
   rawKnowledgeHits: CollectedKnowledgeHit[];
   rawDatasetHits: CollectedDatasetHit[];
@@ -345,6 +358,8 @@ export type CollectionJobRecord = {
   knowledgeQueries: string[];
   mustInclude: string[];
   mustAvoid: string[];
+  llmPlanRaw: string | null;
+  llmPlan: CollectionLlmPlan | null;
   connectorStatuses: CollectionConnectorStatus[];
   rawKnowledgeHits: CollectedKnowledgeHit[];
   rawDatasetHits: CollectedDatasetHit[];

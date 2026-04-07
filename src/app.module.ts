@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { CollectionController } from './collection/collection.controller';
+import { CollectionLlmService } from './collection/collection-llm.service';
 import { CollectionNormalizerService } from './collection/collection-normalizer.service';
 import { CollectionOrchestratorService } from './collection/collection-orchestrator.service';
 import { CollectionPlannerService } from './collection/collection-planner.service';
@@ -55,6 +56,7 @@ import { StoreService } from './store/store.service';
     DiscoveryOrchestratorService,
     DiscoveryService,
     CollectionPlannerService,
+    CollectionLlmService,
     CollectionNormalizerService,
     CollectionOrchestratorService,
     CollectionService,

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { CollectionSourceId } from '../common/contracts';
 import { DiscoveryConnectorRegistryService } from '../discovery/connectors/connector-registry.service';
+import { CollectionLlmService } from './collection-llm.service';
 import { CollectionNormalizerService } from './collection-normalizer.service';
 import { CollectionPlannerService, type CollectionRequest } from './collection-planner.service';
 
@@ -10,10 +11,26 @@ export class CollectionOrchestratorService {
     private readonly plannerService: CollectionPlannerService,
     private readonly connectorsService: DiscoveryConnectorRegistryService,
     private readonly normalizerService: CollectionNormalizerService,
+    private readonly llmService: CollectionLlmService,
   ) {}
 
   async execute(request: CollectionRequest) {
-    const { context, plan } = this.plannerService.build(request);
+    const baseline = this.plannerService.build(request);
+    const llmPlanning = await this.llmService.planQueries({
+      query: request.query,
+      kind: request.kind,
+      requestedSources: request.requestedSources,
+      taskSignals: baseline.context.taskSignals,
+      modalitySignals: baseline.context.modalitySignals,
+      datasetQueries: baseline.plan.canonicalDatasetQueries,
+      knowledgeQueries: baseline.plan.canonicalKnowledgeQueries,
+      mustInclude: baseline.plan.mustInclude,
+      mustAvoid: baseline.plan.mustAvoid,
+    });
+    const { context, plan } = this.plannerService.build({
+      ...request,
+      llmPlan: llmPlanning?.plan ?? null,
+    });
     const requestedSources = request.requestedSources;
 
     const [knowledgeSearch, datasetSearch] = await Promise.all([
@@ -28,6 +45,8 @@ export class CollectionOrchestratorService {
     return {
       context,
       plan,
+      llmPlanRaw: llmPlanning?.rawOutput ?? null,
+      llmPlan: llmPlanning?.plan ?? null,
       connectorStatuses: this.connectorSummary(
         requestedSources,
         [...knowledgeSearch.debug, ...datasetSearch.debug],

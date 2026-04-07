@@ -9,6 +9,7 @@ import type {
   CollectionKind,
   CollectionSourceId,
   CollectionConnectorStatus,
+  CollectionLlmPlan,
   CreateDatasetInput,
   DatasetAnalysisResponse,
   DatasetRecord,
@@ -217,6 +218,8 @@ export class StoreService {
       knowledgeQueries: [],
       mustInclude: [],
       mustAvoid: [],
+      llmPlanRaw: null,
+      llmPlan: null,
       connectorStatuses: [],
       rawKnowledgeHits: [],
       rawDatasetHits: [],
@@ -238,6 +241,8 @@ export class StoreService {
     knowledgeQueries: string[];
     mustInclude: string[];
     mustAvoid: string[];
+    llmPlanRaw?: string | null;
+    llmPlan?: CollectionLlmPlan | null;
   }): void {
     const job = this.collectionJobs.get(jobId);
     if (!job) {
@@ -250,6 +255,8 @@ export class StoreService {
     job.knowledgeQueries = [...payload.knowledgeQueries];
     job.mustInclude = [...payload.mustInclude];
     job.mustAvoid = [...payload.mustAvoid];
+    job.llmPlanRaw = payload.llmPlanRaw ?? null;
+    job.llmPlan = payload.llmPlan ?? null;
   }
 
   completeCollectionJob(jobId: string, payload: {
@@ -325,6 +332,8 @@ export class StoreService {
       knowledgeQueries: [...job.knowledgeQueries],
       mustInclude: [...job.mustInclude],
       mustAvoid: [...job.mustAvoid],
+      llmPlanRaw: job.llmPlanRaw,
+      llmPlan: job.llmPlan,
       connectorStatuses: [...job.connectorStatuses],
       rawKnowledgeHits: [...job.rawKnowledgeHits],
       rawDatasetHits: [...job.rawDatasetHits],
