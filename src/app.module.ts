@@ -1,5 +1,10 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
+import { CollectionController } from './collection/collection.controller';
+import { CollectionNormalizerService } from './collection/collection-normalizer.service';
+import { CollectionOrchestratorService } from './collection/collection-orchestrator.service';
+import { CollectionPlannerService } from './collection/collection-planner.service';
+import { CollectionService } from './collection/collection.service';
 import { CatalogConnectorsService } from './connectors/catalog.connectors';
 import { DatasetsController } from './datasets/datasets.controller';
 import { DiscoveryConnectorRegistryService } from './discovery/connectors/connector-registry.service';
@@ -29,6 +34,7 @@ import { StoreService } from './store/store.service';
     DatasetsController,
     DomainRecommendationController,
     DiscoveryController,
+    CollectionController,
   ],
   providers: [
     StoreService,
@@ -48,6 +54,10 @@ import { StoreService } from './store/store.service';
     DiscoveryNormalizerService,
     DiscoveryOrchestratorService,
     DiscoveryService,
+    CollectionPlannerService,
+    CollectionNormalizerService,
+    CollectionOrchestratorService,
+    CollectionService,
   ],
 })
 export class AppModule {}

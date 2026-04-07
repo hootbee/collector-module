@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import Papa from 'papaparse';
 import { execFile as execFileCallback } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { promisify } from 'node:util';
 import { tokenize, uniqueKeepOrder } from '../../common/text';
 import type { DiscoveryContext } from '../../common/contracts';
@@ -8,9 +9,10 @@ import type { DiscoveryConnector } from './connector.interface';
 import {
   buildDatasetEntry,
   buildQueryMatchSignals,
+  connectorSearchMetadata,
   envNumber,
 } from './connector.utils';
-import type { DiscoveryPlan } from '../types/discovery-plan';
+import { datasetQueriesForSource, type DiscoveryPlan } from '../types/discovery-plan';
 import type {
   DatasetDiscoveryHit,
   DiscoverySearchOutcome,
@@ -37,9 +39,27 @@ export class KaggleDatasetsConnector implements DiscoveryConnector {
     plan: DiscoveryPlan,
     context: DiscoveryContext,
   ): Promise<DiscoverySearchOutcome<DatasetDiscoveryHit>> {
+    const connectorMeta = connectorSearchMetadata('kaggle');
+    const preflightError = this.validateEnvironment();
+    if (preflightError) {
+      return {
+        hits: [],
+        debug: [
+          {
+            id: '__kaggle_preflight__',
+            connector: 'kaggle',
+            matchedQueries: [],
+            matchedTerms: [],
+            status: 'error',
+            error: preflightError,
+          },
+        ],
+      };
+    }
     const hits: DatasetDiscoveryHit[] = [];
     const debug: DiscoverySearchOutcome<DatasetDiscoveryHit>['debug'] = [];
-    const queries = plan.datasetQueries.slice(0, 2);
+    const sourceQueries = datasetQueriesForSource(plan, 'kaggle');
+    const queries = sourceQueries.slice(0, 2);
 
     for (const query of queries) {
       try {
@@ -70,7 +90,7 @@ export class KaggleDatasetsConnector implements DiscoveryConnector {
           const { matchedQueries, matchedTerms } = buildQueryMatchSignals(
             text,
             entry.tags,
-            plan.datasetQueries,
+            sourceQueries,
             plan.mustInclude,
           );
 
@@ -78,6 +98,9 @@ export class KaggleDatasetsConnector implements DiscoveryConnector {
             id: entry.id,
             kind: 'dataset',
             connector: 'kaggle',
+            sourceType: connectorMeta.sourceType,
+            sourcePriority: connectorMeta.priority,
+            sourceReliability: connectorMeta.reliability,
             title: entry.name,
             text,
             tags: entry.tags,
@@ -134,11 +157,32 @@ export class KaggleDatasetsConnector implements DiscoveryConnector {
       skipEmptyLines: true,
     });
 
-    if (parsed.errors.length > 0) {
-      throw new Error(parsed.errors[0]?.message ?? 'Failed to parse Kaggle CLI CSV output.');
+    const blockingErrors = parsed.errors.filter((error) => {
+      const message = error.message?.trim() ?? '';
+      return !message.includes("Unable to auto-detect delimiting character");
+    });
+    if (blockingErrors.length > 0) {
+      throw new Error(`Kaggle CSV parse failed: ${blockingErrors[0]?.message ?? 'unknown parse error'}`);
     }
 
     return parsed.data.slice(0, limit);
+  }
+
+  private validateEnvironment(): string | null {
+    const cliPath = process.env.KAGGLE_CLI_PATH?.trim();
+    if (cliPath && cliPath.includes('/') && !existsSync(cliPath)) {
+      return `Kaggle CLI was not found at ${cliPath}`;
+    }
+
+    const hasToken = Boolean(process.env.KAGGLE_API_TOKEN?.trim());
+    const hasLegacyPair = Boolean(process.env.KAGGLE_USERNAME?.trim() && process.env.KAGGLE_KEY?.trim());
+    const configDir = process.env.KAGGLE_CONFIG_DIR?.trim();
+    const hasConfigJson = Boolean(configDir && existsSync(`${configDir}/kaggle.json`));
+    if (!hasToken && !hasLegacyPair && !hasConfigJson) {
+      return 'Kaggle credentials are not configured.';
+    }
+
+    return null;
   }
 
   private pick(row: KaggleRow, keys: string[]): string {

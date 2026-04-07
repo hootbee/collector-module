@@ -5,10 +5,11 @@ import type { DiscoveryConnector } from './connector.interface';
 import {
   buildDatasetEntry,
   buildQueryMatchSignals,
+  connectorSearchMetadata,
   envNumber,
   fetchJson,
 } from './connector.utils';
-import type { DiscoveryPlan } from '../types/discovery-plan';
+import { datasetQueriesForSource, type DiscoveryPlan } from '../types/discovery-plan';
 import type {
   DatasetDiscoveryHit,
   DiscoverySearchOutcome,
@@ -47,7 +48,9 @@ export class HuggingFaceDatasetsConnector implements DiscoveryConnector {
     plan: DiscoveryPlan,
     context: DiscoveryContext,
   ): Promise<DiscoverySearchOutcome<DatasetDiscoveryHit>> {
-    const queries = plan.datasetQueries.slice(0, 3);
+    const connectorMeta = connectorSearchMetadata('huggingface');
+    const sourceQueries = datasetQueriesForSource(plan, 'huggingface');
+    const queries = sourceQueries.slice(0, 3);
     const hits: DatasetDiscoveryHit[] = [];
     const debug: DiscoverySearchOutcome<DatasetDiscoveryHit>['debug'] = [];
     const limit = Math.max(2, Math.min(envNumber('DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE', 10), 10));
@@ -102,7 +105,7 @@ export class HuggingFaceDatasetsConnector implements DiscoveryConnector {
             const { matchedQueries, matchedTerms } = buildQueryMatchSignals(
               text,
               entry.tags,
-              plan.datasetQueries,
+              sourceQueries,
               plan.mustInclude,
             );
 
@@ -110,6 +113,9 @@ export class HuggingFaceDatasetsConnector implements DiscoveryConnector {
               id: entry.id,
               kind: 'dataset',
               connector: 'huggingface',
+              sourceType: connectorMeta.sourceType,
+              sourcePriority: connectorMeta.priority,
+              sourceReliability: connectorMeta.reliability,
               title: entry.name,
               text,
               tags: entry.tags,

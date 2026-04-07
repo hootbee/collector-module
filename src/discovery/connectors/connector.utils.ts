@@ -7,6 +7,7 @@ import type {
 } from '../../common/contracts';
 import { domainCatalog, modalityCatalog, taskCatalog } from '../../common/catalog';
 import { tokenize, uniqueKeepOrder } from '../../common/text';
+import { connectorMetadata } from '../discovery-ranking.config';
 
 type ModalityType = 'text' | 'table' | 'hybrid';
 
@@ -27,6 +28,10 @@ export function buildUserAgent(): string {
   const base = process.env.DISCOVERY_FETCHER_USER_AGENT?.trim() || 'stage-one-backend/0.1';
   const mailto = process.env.CROSSREF_MAILTO?.trim();
   return mailto ? `${base} (mailto:${mailto})` : base;
+}
+
+export function connectorSearchMetadata(connector: string) {
+  return connectorMetadata(connector);
 }
 
 export async function fetchJson<T>(url: string, init: RequestInit = {}): Promise<T> {
@@ -329,15 +334,32 @@ function inferKnowledgeKind(
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
-  const controller = new AbortController();
   const timeoutMs = envNumber('DISCOVERY_HTTP_TIMEOUT_MS', 8000);
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, {
-      ...init,
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timeout);
+  const retryCount = Math.max(0, Math.min(envNumber('DISCOVERY_HTTP_RETRY_COUNT', 2), 3));
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= retryCount; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {
+        ...init,
+        signal: controller.signal,
+      });
+      if (response.status >= 500 && attempt < retryCount) {
+        lastError = new Error(`HTTP ${response.status} for ${url}`);
+        continue;
+      }
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (attempt >= retryCount) {
+        throw error;
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
   }
+
+  throw (lastError instanceof Error ? lastError : new Error(`Failed to fetch ${url}`));
 }

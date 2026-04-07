@@ -5,10 +5,11 @@ import type { DiscoveryConnector } from './connector.interface';
 import {
   buildDatasetEntry,
   buildQueryMatchSignals,
+  connectorSearchMetadata,
   envNumber,
   fetchJson,
 } from './connector.utils';
-import type { DiscoveryPlan } from '../types/discovery-plan';
+import { datasetQueriesForSource, type DiscoveryPlan } from '../types/discovery-plan';
 import type {
   DatasetDiscoveryHit,
   DiscoverySearchOutcome,
@@ -74,7 +75,9 @@ export class OpenMlDatasetsConnector implements DiscoveryConnector {
     plan: DiscoveryPlan,
     context: DiscoveryContext,
   ): Promise<DiscoverySearchOutcome<DatasetDiscoveryHit>> {
-    const queries = plan.datasetQueries.slice(0, 3);
+    const connectorMeta = connectorSearchMetadata('openml');
+    const sourceQueries = datasetQueriesForSource(plan, 'openml');
+    const queries = sourceQueries.slice(0, 3);
     const hits: DatasetDiscoveryHit[] = [];
     const debug: DiscoverySearchOutcome<DatasetDiscoveryHit>['debug'] = [];
     const limit = Math.max(2, Math.min(envNumber('DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE', 10), 8));
@@ -134,7 +137,7 @@ export class OpenMlDatasetsConnector implements DiscoveryConnector {
             const { matchedQueries, matchedTerms } = buildQueryMatchSignals(
               text,
               entry.tags,
-              plan.datasetQueries,
+              sourceQueries,
               plan.mustInclude,
             );
 
@@ -142,6 +145,9 @@ export class OpenMlDatasetsConnector implements DiscoveryConnector {
               id: entry.id,
               kind: 'dataset',
               connector: 'openml',
+              sourceType: connectorMeta.sourceType,
+              sourcePriority: connectorMeta.priority,
+              sourceReliability: connectorMeta.reliability,
               title: entry.name,
               text,
               tags: entry.tags,
@@ -310,11 +316,16 @@ export class OpenMlDatasetsConnector implements DiscoveryConnector {
     const compressed = uniqueKeepOrder(tokenize(query).filter((token) => !stopwords.has(token)))
       .slice(0, 3)
       .join(' ');
+    const compressedTokens = tokenize(compressed);
+    const bigram = compressedTokens.slice(0, 2).join(' ');
+    const unigram = compressedTokens[0] ?? '';
 
     return uniqueKeepOrder([
       query,
       this.trimDatasetSuffix(query),
       compressed,
+      bigram,
+      unigram,
       ...(context.modality === 'text'
         ? ['authorship', 'text classification', 'sentiment', 'intent', 'spam']
         : []),

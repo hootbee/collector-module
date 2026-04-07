@@ -92,6 +92,8 @@ export class DiscoveryService {
         selectedDomains: input.selectedDomains,
       });
       const orchestration = await this.discoveryOrchestratorService.execute(context);
+      const knowledgeConnectorSummary = this.connectorSummary(orchestration.knowledgeSearchDebug);
+      const datasetConnectorSummary = this.connectorSummary(orchestration.datasetSearchDebug);
 
       this.storeService.startJob(input.jobId, {
         stage: 'query expansion',
@@ -113,8 +115,22 @@ export class DiscoveryService {
           textColumns: context.textColumns,
           expandedKeywords: orchestration.plan.mustInclude,
           generatedQueries: orchestration.plan.datasetQueries,
+          canonicalDatasetQueries: orchestration.plan.canonicalDatasetQueries,
+          fallbackDatasetQueries: orchestration.plan.fallbackDatasetQueries,
+          datasetSourceQueries: orchestration.plan.datasetSourceQueries,
           knowledgeQueries: orchestration.plan.knowledgeQueries,
+          canonicalKnowledgeQueries: orchestration.plan.canonicalKnowledgeQueries,
+          fallbackKnowledgeQueries: orchestration.plan.fallbackKnowledgeQueries,
+          knowledgeSourceQueries: orchestration.plan.knowledgeSourceQueries,
           mustAvoid: orchestration.plan.mustAvoid,
+        })}`,
+      );
+      console.info(
+        `[DiscoveryService] connector summary ${JSON.stringify({
+          jobId: input.jobId,
+          datasetId: input.dataset.id,
+          knowledge: knowledgeConnectorSummary,
+          datasets: datasetConnectorSummary,
         })}`,
       );
 
@@ -143,6 +159,47 @@ export class DiscoveryService {
       const message = error instanceof Error ? error.message : 'Unknown discovery failure';
       this.storeService.failJob(input.jobId, message);
     }
+  }
+
+  private connectorSummary(
+    debugEntries: Array<{
+      connector: string;
+      status?: 'ok' | 'error';
+      count?: number;
+      error?: string;
+    }>,
+  ) {
+    const grouped = new Map<
+      string,
+      {
+        status: 'ok' | 'error';
+        count: number;
+        errors: string[];
+      }
+    >();
+
+    for (const entry of debugEntries) {
+      const current = grouped.get(entry.connector) ?? {
+        status: 'ok',
+        count: 0,
+        errors: [],
+      };
+      current.count += entry.count ?? 0;
+      if (entry.status === 'error') {
+        current.status = 'error';
+        if (entry.error) {
+          current.errors.push(entry.error);
+        }
+      }
+      grouped.set(entry.connector, current);
+    }
+
+    return [...grouped.entries()].map(([connector, summary]) => ({
+      connector,
+      status: summary.status,
+      count: summary.count,
+      errors: summary.errors.slice(0, 3),
+    }));
   }
 
   private async streamKnowledge(

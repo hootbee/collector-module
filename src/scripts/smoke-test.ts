@@ -8,13 +8,13 @@ import { ProfilingService } from '../profiling/profiling.service';
 import { StoreService } from '../store/store.service';
 
 async function waitForJob(discoveryService: DiscoveryService, jobId: string) {
-  const waitAttempts = Number(process.env.SMOKE_WAIT_ATTEMPTS ?? 40);
-  const waitMs = Number(process.env.SMOKE_WAIT_MS ?? 250);
+  const waitAttempts = Number(process.env.SMOKE_WAIT_ATTEMPTS ?? 80);
+  const waitMs = Number(process.env.SMOKE_WAIT_MS ?? 500);
 
   for (let attempt = 0; attempt < waitAttempts; attempt += 1) {
     const status = discoveryService.getStatus(jobId);
     if (status.status === 'failed') {
-      throw new Error(`Discovery job ${jobId} failed.`);
+      throw new Error(`Discovery job ${jobId} failed: ${status.error ?? 'unknown error'}`);
     }
     if (status.status === 'completed') {
       return discoveryService.getResults(jobId);

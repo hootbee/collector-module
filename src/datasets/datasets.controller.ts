@@ -2,14 +2,16 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Get,
   NotFoundException,
   Param,
+  Patch,
   Post,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import type { TaskType } from '../common/contracts';
+import type { TaskType, UpdateSelectedExternalResourcesInput } from '../common/contracts';
 import { parseCsvBuffer } from '../common/csv';
 import { ProfilingService } from '../profiling/profiling.service';
 import { StoreService } from '../store/store.service';
@@ -102,5 +104,60 @@ export class DatasetsController {
       dataset.analysis ?? this.profilingService.analyzeDataset(dataset);
 
     return this.storeService.setDatasetAnalysis(dataset.id, analysis);
+  }
+
+  @Get(':datasetId/selected-external-resources')
+  getSelectedExternalResources(@Param('datasetId') datasetId: string) {
+    const dataset = this.storeService.getDataset(datasetId);
+    if (!dataset) {
+      throw new NotFoundException(`Dataset ${datasetId} was not found.`);
+    }
+
+    return (
+      this.storeService.getSelectedExternalResources(datasetId) ?? {
+        datasetId,
+        knowledgeItems: [],
+        datasetItems: [],
+        selectionNotes: '',
+        updatedAt: null,
+      }
+    );
+  }
+
+  @Patch(':datasetId/selected-external-resources')
+  updateSelectedExternalResources(
+    @Param('datasetId') datasetId: string,
+    @Body() body: Partial<UpdateSelectedExternalResourcesInput> | undefined,
+  ) {
+    const dataset = this.storeService.getDataset(datasetId);
+    if (!dataset) {
+      throw new NotFoundException(`Dataset ${datasetId} was not found.`);
+    }
+
+    const knowledgeItemIds = Array.isArray(body?.knowledgeItemIds)
+      ? body.knowledgeItemIds.filter((item): item is string => typeof item === 'string')
+      : [];
+    const datasetItemIds = Array.isArray(body?.datasetItemIds)
+      ? body.datasetItemIds.filter((item): item is string => typeof item === 'string')
+      : [];
+
+    if (
+      (body?.knowledgeItemIds && knowledgeItemIds.length !== body.knowledgeItemIds.length) ||
+      (body?.datasetItemIds && datasetItemIds.length !== body.datasetItemIds.length)
+    ) {
+      throw new BadRequestException('knowledgeItemIds and datasetItemIds must be string arrays.');
+    }
+
+    const result = this.storeService.setSelectedExternalResources(datasetId, {
+      knowledgeItemIds,
+      datasetItemIds,
+      selectionNotes: typeof body?.selectionNotes === 'string' ? body.selectionNotes : '',
+    });
+
+    if (!result) {
+      throw new NotFoundException(`Dataset ${datasetId} was not found.`);
+    }
+
+    return result;
   }
 }

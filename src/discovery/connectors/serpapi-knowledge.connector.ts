@@ -5,10 +5,11 @@ import type { DiscoveryConnector } from './connector.interface';
 import {
   buildKnowledgeEntry,
   buildQueryMatchSignals,
+  connectorSearchMetadata,
   envNumber,
   fetchJson,
 } from './connector.utils';
-import type { DiscoveryPlan } from '../types/discovery-plan';
+import { knowledgeQueriesForSource, type DiscoveryPlan } from '../types/discovery-plan';
 import type {
   DatasetDiscoveryHit,
   DiscoverySearchOutcome,
@@ -42,6 +43,7 @@ export class SerpApiKnowledgeConnector implements DiscoveryConnector {
     plan: DiscoveryPlan,
     _context: DiscoveryContext,
   ): Promise<DiscoverySearchOutcome<KnowledgeDiscoveryHit>> {
+    const connectorMeta = connectorSearchMetadata('serpapi');
     const apiKey = process.env.SERPAPI_API_KEY?.trim();
     if (!apiKey) {
       return {
@@ -63,7 +65,8 @@ export class SerpApiKnowledgeConnector implements DiscoveryConnector {
     const debug: DiscoverySearchOutcome<KnowledgeDiscoveryHit>['debug'] = [];
     const limit = Math.max(2, Math.min(envNumber('DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE', 10), 8));
 
-    for (const query of plan.knowledgeQueries.slice(0, 3)) {
+    const sourceQueries = knowledgeQueriesForSource(plan, 'serpapi');
+    for (const query of sourceQueries.slice(0, 3)) {
       const url = new URL('https://serpapi.com/search.json');
       url.searchParams.set('engine', 'google');
       url.searchParams.set('q', query);
@@ -96,7 +99,7 @@ export class SerpApiKnowledgeConnector implements DiscoveryConnector {
           const { matchedQueries, matchedTerms } = buildQueryMatchSignals(
             text,
             entry.tags,
-            plan.knowledgeQueries,
+            sourceQueries,
             plan.mustInclude,
           );
 
@@ -104,6 +107,9 @@ export class SerpApiKnowledgeConnector implements DiscoveryConnector {
             id: entry.id,
             kind: 'knowledge',
             connector: 'serpapi',
+            sourceType: connectorMeta.sourceType,
+            sourcePriority: connectorMeta.priority,
+            sourceReliability: connectorMeta.reliability,
             title: entry.title,
             text,
             tags: entry.tags,

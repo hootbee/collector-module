@@ -1,5 +1,14 @@
 export type TaskType = 'classification' | 'anomaly' | 'regression';
 export type DiscoveryJobStatus = 'queued' | 'running' | 'completed' | 'failed';
+export type CollectionKind = 'dataset' | 'knowledge' | 'both';
+export type CollectionSourceId =
+  | 'seed-catalog'
+  | 'huggingface'
+  | 'openml'
+  | 'uci'
+  | 'kaggle'
+  | 'serpapi'
+  | 'crossref';
 export type TaskSignal =
   | 'classification'
   | 'regression'
@@ -117,6 +126,20 @@ export type ExternalDatasetItem = {
   matchedReason?: string;
 };
 
+export type SelectedExternalResourcesRecord = {
+  datasetId: string;
+  knowledgeItems: ExternalKnowledgeItem[];
+  datasetItems: ExternalDatasetItem[];
+  selectionNotes: string;
+  updatedAt: string;
+};
+
+export type UpdateSelectedExternalResourcesInput = {
+  knowledgeItemIds: string[];
+  datasetItemIds: string[];
+  selectionNotes?: string;
+};
+
 export type DatasetAnalysisResponse = {
   sessionId: string;
   datasetId: string;
@@ -176,6 +199,94 @@ export type DiscoveryJobResultsResponse = {
   datasetItems: ExternalDatasetItem[];
 };
 
+export type CollectionConnectorStatus = {
+  connector: CollectionSourceId;
+  status: 'ok' | 'error';
+  count: number;
+  errors: string[];
+};
+
+export type CollectedKnowledgeHit = {
+  id: string;
+  connector: CollectionSourceId;
+  sourceType: 'primary' | 'support' | 'meta' | 'seed';
+  sourcePriority: number;
+  sourceReliability: number;
+  title: string;
+  text: string;
+  tags: string[];
+  domainIds: string[];
+  taskSignals: TaskSignal[];
+  modalitySignals: ModalitySignal[];
+  modality: 'text' | 'table' | 'hybrid';
+  negativeTags: string[];
+  matchedQueries: string[];
+  matchedTerms: string[];
+  source: string;
+  sourceUrl?: string;
+  publisher?: string;
+  retrievalHint?: string;
+};
+
+export type CollectedDatasetHit = {
+  id: string;
+  connector: CollectionSourceId;
+  sourceType: 'primary' | 'support' | 'meta' | 'seed';
+  sourcePriority: number;
+  sourceReliability: number;
+  title: string;
+  text: string;
+  tags: string[];
+  domainIds: string[];
+  taskSignals: TaskSignal[];
+  modalitySignals: ModalitySignal[];
+  modality: 'text' | 'table' | 'hybrid';
+  negativeTags: string[];
+  matchedQueries: string[];
+  matchedTerms: string[];
+  provider: string;
+  providerDetail?: string;
+  publisher?: string;
+  sourceUrl?: string;
+  retrievalHint?: string;
+};
+
+export type CollectionJobStatusResponse = {
+  jobId: string;
+  query: string;
+  kind: CollectionKind;
+  requestedSources: CollectionSourceId[];
+  status: DiscoveryJobStatus;
+  stage: string;
+  rawKnowledgeCount: number;
+  rawDatasetCount: number;
+  knowledgeCount: number;
+  datasetCount: number;
+  connectorStatuses: CollectionConnectorStatus[];
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  error: string | null;
+};
+
+export type CollectionJobResultsResponse = {
+  jobId: string;
+  query: string;
+  kind: CollectionKind;
+  requestedSources: CollectionSourceId[];
+  status: DiscoveryJobStatus;
+  stage: string;
+  datasetQueries: string[];
+  knowledgeQueries: string[];
+  mustInclude: string[];
+  mustAvoid: string[];
+  connectorStatuses: CollectionConnectorStatus[];
+  rawKnowledgeHits: CollectedKnowledgeHit[];
+  rawDatasetHits: CollectedDatasetHit[];
+  knowledgeItems: ExternalKnowledgeItem[];
+  datasetItems: ExternalDatasetItem[];
+};
+
 export type SessionRecord = {
   id: string;
   createdAt: string;
@@ -196,6 +307,7 @@ export type DatasetRecord = {
   createdAt: string;
   analysis?: DatasetAnalysisResponse;
   recommendation?: DomainRecommendationResponse;
+  selectedExternalResources?: SelectedExternalResourcesRecord;
 };
 
 export type DiscoveryJobRecord = {
@@ -212,6 +324,30 @@ export type DiscoveryJobRecord = {
   error: string | null;
   generatedQueries: string[];
   expandedKeywords: string[];
+  knowledgeItems: ExternalKnowledgeItem[];
+  datasetItems: ExternalDatasetItem[];
+};
+
+export type CollectionJobRecord = {
+  id: string;
+  query: string;
+  kind: CollectionKind;
+  requestedSources: CollectionSourceId[];
+  taskSignals: TaskSignal[];
+  modalitySignals: ModalitySignal[];
+  status: DiscoveryJobStatus;
+  stage: string;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  error: string | null;
+  datasetQueries: string[];
+  knowledgeQueries: string[];
+  mustInclude: string[];
+  mustAvoid: string[];
+  connectorStatuses: CollectionConnectorStatus[];
+  rawKnowledgeHits: CollectedKnowledgeHit[];
+  rawDatasetHits: CollectedDatasetHit[];
   knowledgeItems: ExternalKnowledgeItem[];
   datasetItems: ExternalDatasetItem[];
 };

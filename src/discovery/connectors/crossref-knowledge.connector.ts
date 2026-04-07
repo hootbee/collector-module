@@ -5,12 +5,13 @@ import type { DiscoveryConnector } from './connector.interface';
 import {
   buildKnowledgeEntry,
   buildQueryMatchSignals,
+  connectorSearchMetadata,
   fetchJson,
   stripHtml,
   truncateText,
   envNumber,
 } from './connector.utils';
-import type { DiscoveryPlan } from '../types/discovery-plan';
+import { knowledgeQueriesForSource, type DiscoveryPlan } from '../types/discovery-plan';
 import type {
   DatasetDiscoveryHit,
   DiscoverySearchOutcome,
@@ -50,7 +51,9 @@ export class CrossrefKnowledgeConnector implements DiscoveryConnector {
     plan: DiscoveryPlan,
     _context: DiscoveryContext,
   ): Promise<DiscoverySearchOutcome<KnowledgeDiscoveryHit>> {
-    const queries = plan.knowledgeQueries.slice(0, 3);
+    const connectorMeta = connectorSearchMetadata('crossref');
+    const sourceQueries = knowledgeQueriesForSource(plan, 'crossref');
+    const queries = sourceQueries.slice(0, 3);
     const hits: KnowledgeDiscoveryHit[] = [];
     const debug: DiscoverySearchOutcome<KnowledgeDiscoveryHit>['debug'] = [];
     const rows = Math.max(2, Math.min(envNumber('DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE', 10), 8));
@@ -90,7 +93,7 @@ export class CrossrefKnowledgeConnector implements DiscoveryConnector {
           const { matchedQueries, matchedTerms } = buildQueryMatchSignals(
             text,
             entry.tags,
-            plan.knowledgeQueries,
+            sourceQueries,
             plan.mustInclude,
           );
 
@@ -98,6 +101,9 @@ export class CrossrefKnowledgeConnector implements DiscoveryConnector {
             id: entry.id,
             kind: 'knowledge',
             connector: 'crossref',
+            sourceType: connectorMeta.sourceType,
+            sourcePriority: connectorMeta.priority,
+            sourceReliability: connectorMeta.reliability,
             title: entry.title,
             text,
             tags: entry.tags,

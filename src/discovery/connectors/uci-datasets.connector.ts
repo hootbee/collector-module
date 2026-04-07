@@ -6,11 +6,12 @@ import {
   buildDatasetEntry,
   buildQueryMatchSignals,
   collapseWhitespace,
+  connectorSearchMetadata,
   envNumber,
   fetchText,
   stripHtml,
 } from './connector.utils';
-import type { DiscoveryPlan } from '../types/discovery-plan';
+import { datasetQueriesForSource, type DiscoveryPlan } from '../types/discovery-plan';
 import type {
   DatasetDiscoveryHit,
   DiscoverySearchOutcome,
@@ -43,7 +44,9 @@ export class UciDatasetsConnector implements DiscoveryConnector {
     plan: DiscoveryPlan,
     context: DiscoveryContext,
   ): Promise<DiscoverySearchOutcome<DatasetDiscoveryHit>> {
-    const queries = plan.datasetQueries.slice(0, 2);
+    const connectorMeta = connectorSearchMetadata('uci');
+    const sourceQueries = datasetQueriesForSource(plan, 'uci');
+    const queries = sourceQueries.slice(0, 2);
     const hits: DatasetDiscoveryHit[] = [];
     const debug: DiscoverySearchOutcome<DatasetDiscoveryHit>['debug'] = [];
     const perQueryLimit = Math.max(2, Math.min(envNumber('DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE', 10), 6));
@@ -54,6 +57,9 @@ export class UciDatasetsConnector implements DiscoveryConnector {
       try {
         const html = await fetchText(url);
         const parsed = this.parseDatasetCards(html).slice(0, perQueryLimit * 2);
+        if (parsed.length === 0) {
+          throw new Error('UCI dataset cards were not found; page structure may have changed.');
+        }
         let count = 0;
 
         for (const item of parsed) {
@@ -78,7 +84,7 @@ export class UciDatasetsConnector implements DiscoveryConnector {
           const { matchedQueries, matchedTerms } = buildQueryMatchSignals(
             text,
             entry.tags,
-            plan.datasetQueries,
+            sourceQueries,
             plan.mustInclude,
           );
 
@@ -86,6 +92,9 @@ export class UciDatasetsConnector implements DiscoveryConnector {
             id: entry.id,
             kind: 'dataset',
             connector: 'uci',
+            sourceType: connectorMeta.sourceType,
+            sourcePriority: connectorMeta.priority,
+            sourceReliability: connectorMeta.reliability,
             title: entry.name,
             text,
             tags: entry.tags,

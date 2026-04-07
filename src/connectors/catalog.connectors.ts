@@ -1,9 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { datasetCatalog, knowledgeCatalog } from '../common/catalog';
 import type { DiscoveryContext } from '../common/contracts';
-import { buildQueryMatchSignals, inferModalitySignals } from '../discovery/connectors/connector.utils';
+import {
+  buildQueryMatchSignals,
+  connectorSearchMetadata,
+  inferModalitySignals,
+} from '../discovery/connectors/connector.utils';
 import type { DiscoveryConnector } from '../discovery/connectors/connector.interface';
-import type { DiscoveryPlan } from '../discovery/types/discovery-plan';
+import {
+  datasetQueriesForSource,
+  knowledgeQueriesForSource,
+  type DiscoveryPlan,
+} from '../discovery/types/discovery-plan';
 import type {
   DatasetDiscoveryHit,
   DiscoverySearchOutcome,
@@ -55,11 +63,12 @@ export class CatalogConnectorsService implements DiscoveryConnector {
     plan: DiscoveryPlan,
     context: DiscoveryContext,
   ): KnowledgeDiscoveryHit {
+    const connectorMeta = connectorSearchMetadata('seed-catalog');
     const text = `${entry.title} ${entry.summary} ${entry.source} ${entry.publisher ?? ''}`;
     const { matchedQueries, matchedTerms } = buildQueryMatchSignals(
       text,
       entry.tags,
-      plan.knowledgeQueries,
+      knowledgeQueriesForSource(plan, 'seed-catalog'),
       plan.mustInclude,
     );
 
@@ -67,6 +76,9 @@ export class CatalogConnectorsService implements DiscoveryConnector {
       id: entry.id,
       kind: 'knowledge',
       connector: 'seed-catalog',
+      sourceType: connectorMeta.sourceType,
+      sourcePriority: connectorMeta.priority,
+      sourceReliability: connectorMeta.reliability,
       title: entry.title,
       text,
       tags: entry.tags,
@@ -86,11 +98,12 @@ export class CatalogConnectorsService implements DiscoveryConnector {
     plan: DiscoveryPlan,
     context: DiscoveryContext,
   ): DatasetDiscoveryHit {
+    const connectorMeta = connectorSearchMetadata('seed-catalog');
     const text = `${entry.name} ${entry.description} ${entry.provider} ${entry.providerDetail ?? ''} ${entry.modality}`;
     const { matchedQueries, matchedTerms } = buildQueryMatchSignals(
       text,
       entry.tags,
-      plan.datasetQueries,
+      datasetQueriesForSource(plan, 'seed-catalog'),
       plan.mustInclude,
     );
 
@@ -98,6 +111,9 @@ export class CatalogConnectorsService implements DiscoveryConnector {
       id: entry.id,
       kind: 'dataset',
       connector: 'seed-catalog',
+      sourceType: connectorMeta.sourceType,
+      sourcePriority: connectorMeta.priority,
+      sourceReliability: connectorMeta.reliability,
       title: entry.name,
       text,
       tags: entry.tags,
