@@ -8,6 +8,7 @@ import { HuggingFaceDatasetsConnector } from './discovery/connectors/huggingface
 import { KaggleDatasetsConnector } from './discovery/connectors/kaggle-datasets.connector';
 import { SerpApiKnowledgeConnector } from './discovery/connectors/serpapi-knowledge.connector';
 import { UciDatasetsConnector } from './discovery/connectors/uci-datasets.connector';
+import { OpenMlDatasetsConnector } from './discovery/connectors/openml-datasets.connector';
 import { DiscoveryController } from './discovery/discovery.controller';
 import { DiscoveryNormalizerService } from './discovery/discovery-normalizer.service';
 import { DiscoveryOrchestratorService } from './discovery/discovery-orchestrator.service';
@@ -40,6 +41,7 @@ import { StoreService } from './store/store.service';
     KaggleDatasetsConnector,
     SerpApiKnowledgeConnector,
     CrossrefKnowledgeConnector,
+    OpenMlDatasetsConnector,
     DiscoveryConnectorRegistryService,
     DiscoveryQueryPlannerService,
     DiscoveryRankingService,

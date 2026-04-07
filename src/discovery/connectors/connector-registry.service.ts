@@ -15,6 +15,7 @@ import { UciDatasetsConnector } from './uci-datasets.connector';
 import { KaggleDatasetsConnector } from './kaggle-datasets.connector';
 import { SerpApiKnowledgeConnector } from './serpapi-knowledge.connector';
 import { CrossrefKnowledgeConnector } from './crossref-knowledge.connector';
+import { OpenMlDatasetsConnector } from './openml-datasets.connector';
 
 @Injectable()
 export class DiscoveryConnectorRegistryService {
@@ -25,6 +26,7 @@ export class DiscoveryConnectorRegistryService {
     private readonly kaggleConnector: KaggleDatasetsConnector,
     private readonly serpApiConnector: SerpApiKnowledgeConnector,
     private readonly crossrefConnector: CrossrefKnowledgeConnector,
+    private readonly openMlConnector: OpenMlDatasetsConnector,
   ) {}
 
   async searchKnowledgeHits(
@@ -60,6 +62,9 @@ export class DiscoveryConnectorRegistryService {
     }
     if (envFlag('DISCOVERY_ENABLE_CROSSREF_CONNECTOR')) {
       connectors.push(this.crossrefConnector);
+    }
+    if (envFlag('DISCOVERY_ENABLE_OPENML_CONNECTOR')) {
+      connectors.push(this.openMlConnector);
     }
     return connectors;
   }
