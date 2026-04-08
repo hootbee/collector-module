@@ -5,6 +5,8 @@ import type {
   ModalitySignal,
   TaskSignal,
 } from '../common/contracts';
+import { extractJsonBlock, previewLlmText } from './collection-llm.utils';
+import { CollectionLlmClientService } from './collection-llm-client.service';
 
 type ParsedLlmPlan = {
   rawOutput: string;
@@ -56,51 +58,17 @@ const modalitySignals: ModalitySignal[] = [
 
 @Injectable()
 export class CollectionLlmService {
-  private readonly provider = (process.env.COLLECTION_LLM_PROVIDER ?? process.env.LLM_PROVIDER ?? 'rule-based')
-    .trim()
-    .toLowerCase();
-  private readonly apiKey =
-    process.env.COLLECTION_LLM_API_KEY?.trim() ??
-    process.env.LLM_API_KEY?.trim() ??
-    process.env.OPENAI_API_KEY?.trim() ??
-    '';
-  private readonly baseUrl = (
-    process.env.COLLECTION_LLM_BASE_URL?.trim() ||
-    process.env.LLM_BASE_URL?.trim() ||
-    process.env.OPENAI_BASE_URL?.trim() ||
-    'https://api.openai.com/v1'
-  ).replace(/\/$/, '');
-  private readonly model =
-    process.env.COLLECTION_LLM_MODEL?.trim() ||
-    process.env.LLM_MODEL?.trim() ||
-    process.env.OPENAI_MODEL?.trim() ||
-    'gpt-5-mini';
-  private readonly apiMode =
-    (process.env.COLLECTION_LLM_API_MODE?.trim().toLowerCase() ||
-      process.env.LLM_API_MODE?.trim().toLowerCase() ||
-      (this.provider === 'openai' ? 'responses' : 'chat_completions')) as 'responses' | 'chat_completions';
-  private readonly timeoutMs = Number(
-    process.env.COLLECTION_LLM_TIMEOUT_MS ??
-      process.env.LLM_TIMEOUT_MS ??
-      process.env.OPENAI_TIMEOUT_MS ??
-      15000,
-  );
   private readonly enabled = ['1', 'true', 'yes', 'on'].includes(
     (process.env.COLLECTION_LLM_PLANNER_ENABLED ?? 'false').trim().toLowerCase(),
   );
+
+  constructor(private readonly llmClient: CollectionLlmClientService) {}
 
   isEnabled(): boolean {
     if (!this.enabled) {
       return false;
     }
-    return this.isConfigured();
-  }
-
-  private isConfigured(): boolean {
-    if (this.provider === 'openai') {
-      return this.apiKey.length > 0;
-    }
-    return ['openai-compatible', 'vllm', 'openai'].includes(this.provider) && this.baseUrl.length > 0 && this.model.length > 0;
+    return this.llmClient.isConfigured();
   }
 
   async planQueries(input: {
@@ -117,131 +85,28 @@ export class CollectionLlmService {
     if (!this.enabled) {
       return null;
     }
-    if (!this.isConfigured()) {
+    if (!this.llmClient.isConfigured()) {
       throw new Error('Collection LLM planner is enabled but LLM provider configuration is incomplete.');
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
-
     try {
-      return this.apiMode === 'responses'
-        ? await this.callResponsesApi(input, controller.signal)
-        : await this.callChatCompletions(input, controller.signal);
+      const rawOutput = await this.llmClient.requestJson({
+        schemaName: 'collection_query_plan',
+        schema: this.schema(),
+        systemPrompt: this.systemPrompt(),
+        userPrompt: this.userPrompt(input),
+      });
+      const parsed = this.parsePlan(rawOutput, input);
+      if (!parsed) {
+        console.warn(
+          `[CollectionLlmService] planner returned unparseable output: ${previewLlmText(rawOutput)}`,
+        );
+      }
+      return parsed ? { rawOutput, plan: parsed } : null;
     } catch (error) {
       const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
       throw new Error(`Collection LLM planner request failed: ${message}`);
-    } finally {
-      clearTimeout(timeout);
     }
-  }
-
-  private async callResponsesApi(
-    input: Parameters<CollectionLlmService['planQueries']>[0],
-    signal: AbortSignal,
-  ): Promise<ParsedLlmPlan | null> {
-    const response = await fetch(this.responsesUrl(), {
-      method: 'POST',
-      headers: this.buildHeaders(true),
-      body: JSON.stringify({
-        model: this.model,
-        input: [
-          {
-            role: 'system',
-            content: [{ type: 'input_text', text: this.systemPrompt() }],
-          },
-          {
-            role: 'user',
-            content: [{ type: 'input_text', text: this.userPrompt(input) }],
-          },
-        ],
-        text: {
-          format: {
-            type: 'json_schema',
-            name: 'collection_query_plan',
-            strict: true,
-            schema: this.schema(),
-          },
-        },
-      }),
-      signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(`collection LLM responses request failed with status ${response.status}`);
-    }
-
-    const payload = (await response.json()) as Record<string, unknown>;
-    const rawOutput = this.extractOutputText(payload) ?? JSON.stringify(payload);
-    const parsed = this.parsePlan(rawOutput, input);
-    if (!parsed) {
-      console.warn(
-        `[CollectionLlmService] planner returned unparseable responses output: ${this.previewText(rawOutput)}`,
-      );
-    }
-    return parsed ? { rawOutput, plan: parsed } : null;
-  }
-
-  private async callChatCompletions(
-    input: Parameters<CollectionLlmService['planQueries']>[0],
-    signal: AbortSignal,
-  ): Promise<ParsedLlmPlan | null> {
-    const response = await fetch(this.chatCompletionsUrl(), {
-      method: 'POST',
-      headers: this.buildHeaders(false),
-      body: JSON.stringify({
-        model: this.model,
-        messages: [
-          { role: 'system', content: this.systemPrompt() },
-          { role: 'user', content: this.userPrompt(input) },
-        ],
-        stream: false,
-        temperature: 0,
-        top_p: 1,
-        max_tokens: 900,
-        reasoning_effort: 'low',
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'collection_query_plan',
-            strict: true,
-            schema: this.schema(),
-          },
-        },
-        extra_body: {
-          guided_json: this.schema(),
-        },
-      }),
-      signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(`collection LLM chat request failed with status ${response.status}`);
-    }
-
-    const payload = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    const rawOutput = payload.choices?.[0]?.message?.content ?? '';
-    const parsed = this.parsePlan(rawOutput, input);
-    if (!parsed) {
-      console.warn(
-        `[CollectionLlmService] planner returned unparseable chat output: ${this.previewText(rawOutput)}`,
-      );
-    }
-    return parsed ? { rawOutput, plan: parsed } : null;
-  }
-
-  private buildHeaders(requireAuth: boolean): Record<string, string> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (this.apiKey) {
-      headers.Authorization = `Bearer ${this.apiKey}`;
-    } else if (requireAuth) {
-      throw new Error('Collection LLM requires an API key for this provider.');
-    }
-    return headers;
   }
 
   private systemPrompt(): string {
@@ -343,7 +208,7 @@ export class CollectionLlmService {
     text: string,
     input: Parameters<CollectionLlmService['planQueries']>[0],
   ): CollectionLlmPlan | null {
-    const jsonBlock = this.extractJsonBlock(text);
+    const jsonBlock = extractJsonBlock(text);
     if (!jsonBlock) {
       return this.parseLoosePlan(text, input);
     }
@@ -557,117 +422,4 @@ export class CollectionLlmService {
     return result;
   }
 
-  private extractJsonBlock(text: string): string | null {
-    const fencedMatches = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)];
-    for (const match of fencedMatches) {
-      const candidate = match[1]?.trim();
-      if (!candidate) {
-        continue;
-      }
-      const parsedCandidate = this.extractFirstJsonObject(candidate);
-      if (parsedCandidate) {
-        return parsedCandidate;
-      }
-    }
-    return this.extractFirstJsonObject(text);
-  }
-
-  private extractFirstJsonObject(text: string): string | null {
-    let depth = 0;
-    let start = -1;
-    let inString = false;
-    let escapeNext = false;
-
-    for (let index = 0; index < text.length; index += 1) {
-      const char = text[index];
-      if (inString) {
-        if (escapeNext) {
-          escapeNext = false;
-          continue;
-        }
-        if (char === '\\') {
-          escapeNext = true;
-          continue;
-        }
-        if (char === '"') {
-          inString = false;
-        }
-        continue;
-      }
-      if (char === '"') {
-        inString = true;
-        continue;
-      }
-      if (char === '{') {
-        if (depth === 0) {
-          start = index;
-        }
-        depth += 1;
-        continue;
-      }
-      if (char !== '}' || depth === 0) {
-        continue;
-      }
-      depth -= 1;
-      if (depth !== 0 || start < 0) {
-        continue;
-      }
-      const candidate = text.slice(start, index + 1);
-      try {
-        JSON.parse(candidate);
-        return candidate;
-      } catch {
-        start = -1;
-      }
-    }
-    return null;
-  }
-
-  private extractOutputText(payload: Record<string, unknown>): string | null {
-    const direct = payload.output_text;
-    if (typeof direct === 'string' && direct.trim()) {
-      return direct;
-    }
-
-    const output = payload.output;
-    if (!Array.isArray(output)) {
-      return null;
-    }
-
-    for (const message of output) {
-      if (!message || typeof message !== 'object') {
-        continue;
-      }
-      const content = (message as { content?: unknown }).content;
-      if (!Array.isArray(content)) {
-        continue;
-      }
-      for (const item of content) {
-        if (!item || typeof item !== 'object') {
-          continue;
-        }
-        const text = (item as { text?: unknown }).text;
-        if (typeof text === 'string' && text.trim()) {
-          return text;
-        }
-      }
-    }
-
-    return null;
-  }
-
-  private responsesUrl(): string {
-    const base = this.baseUrl.endsWith('/v1') ? this.baseUrl : `${this.baseUrl}/v1`;
-    return `${base}/responses`;
-  }
-
-  private chatCompletionsUrl(): string {
-    const base = this.baseUrl.endsWith('/v1') ? this.baseUrl : `${this.baseUrl}/v1`;
-    return `${base}/chat/completions`;
-  }
-
-  private previewText(text: string): string {
-    const normalized = text.replace(/\s+/g, ' ').trim();
-    return normalized.length > 240 ? `${normalized.slice(0, 240)}...` : normalized;
-  }
 }

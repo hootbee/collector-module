@@ -14,6 +14,7 @@ import type {
 } from '../common/contracts';
 import { StoreService } from '../store/store.service';
 import { buildUserAgent, envNumber, fetchJson, fetchText } from './connectors/connector.utils';
+import { CollectionHtmlExtractionService } from './collection-html-extraction.service';
 
 const execFile = promisify(execFileCallback);
 
@@ -41,7 +42,10 @@ type OpenMlDetailResponse = {
 
 @Injectable()
 export class CollectionDownloadService {
-  constructor(private readonly storeService: StoreService) {}
+  constructor(
+    private readonly storeService: StoreService,
+    private readonly htmlExtractionService: CollectionHtmlExtractionService,
+  ) {}
 
   async createDownloadJob(input: {
     collectionJobId: string;
@@ -283,7 +287,7 @@ export class CollectionDownloadService {
     const datasetId = item.downloadReference?.trim() || this.extractOpenMlId(item.sourceUrl);
     const directUrl = item.downloadUrl?.trim();
 
-    if (directUrl && this.looksLikeDirectFile(directUrl)) {
+    if (directUrl && this.htmlExtractionService.isDirectFileUrl(directUrl)) {
       return [await this.downloadDirectFile(directUrl, targetDir, `${this.safeSegment(item.name)}${extname(directUrl) || '.data'}`)];
     }
 
@@ -346,12 +350,12 @@ export class CollectionDownloadService {
       throw new Error('UCI dataset page URL is missing.');
     }
 
-    if (item.downloadUrl?.trim() && this.looksLikeDirectFile(item.downloadUrl)) {
+    if (item.downloadUrl?.trim() && this.htmlExtractionService.isDirectFileUrl(item.downloadUrl)) {
       return [await this.downloadDirectFile(item.downloadUrl, targetDir, basename(item.downloadUrl) || `${this.safeSegment(item.name)}.zip`)];
     }
 
     const html = await fetchText(pageUrl);
-    const candidates = this.extractDownloadCandidates(html, pageUrl);
+    const candidates = this.htmlExtractionService.extractDownloadCandidates(html, pageUrl);
     if (candidates.length === 0) {
       throw new Error(`No direct dataset files were found on ${pageUrl}.`);
     }
@@ -365,7 +369,7 @@ export class CollectionDownloadService {
     targetDir: string,
   ): Promise<CollectionDownloadedFile[]> {
     const directUrl = item.downloadUrl?.trim();
-    if (directUrl && this.looksLikeDirectFile(directUrl)) {
+    if (directUrl && this.htmlExtractionService.isDirectFileUrl(directUrl)) {
       return [await this.downloadDirectFile(directUrl, targetDir, basename(directUrl) || `${this.safeSegment(item.name)}.bin`)];
     }
 
@@ -375,7 +379,7 @@ export class CollectionDownloadService {
     }
 
     const html = await fetchText(pageUrl);
-    const candidates = this.extractDownloadCandidates(html, pageUrl);
+    const candidates = this.htmlExtractionService.extractDownloadCandidates(html, pageUrl);
     if (candidates.length === 0) {
       throw new Error(`No direct file links were found on ${pageUrl}.`);
     }
@@ -449,26 +453,6 @@ export class CollectionDownloadService {
     return results.sort((left, right) => left.fileName.localeCompare(right.fileName));
   }
 
-  private extractDownloadCandidates(html: string, pageUrl: string): string[] {
-    const base = new URL(pageUrl);
-    const matches = [...html.matchAll(/href=["']([^"']+)["']/gi)];
-    return this.unique(
-      matches
-        .map((match) => match[1]?.trim() ?? '')
-        .filter(Boolean)
-        .map((href) => {
-          try {
-            return new URL(href, base).toString();
-          } catch {
-            return '';
-          }
-        })
-        .filter(Boolean)
-        .filter((candidate) => this.isUsefulDownloadCandidate(candidate))
-        .sort((left, right) => this.downloadCandidateScore(right) - this.downloadCandidateScore(left)),
-    );
-  }
-
   private resolveFileName(
     url: string,
     contentType: string | null,
@@ -526,39 +510,6 @@ export class CollectionDownloadService {
       return false;
     }
     return /\.(parquet|csv|tsv|jsonl|json|txt|zip|gz|tar|arff|xlsx?)$/i.test(value);
-  }
-
-  private looksLikeDirectFile(url: string): boolean {
-    return /\.(csv|tsv|json|jsonl|zip|gz|parquet|arff|xlsx?|txt)($|\?)/i.test(url);
-  }
-
-  private isUsefulDownloadCandidate(url: string): boolean {
-    const value = url.toLowerCase();
-    if (value.endsWith('/manifest.json') || value.includes('manifest.json')) {
-      return false;
-    }
-    if (value.includes('/favicon') || value.endsWith('/robots.txt')) {
-      return false;
-    }
-    if (this.looksLikeDirectFile(url)) {
-      return true;
-    }
-    return /\/static\/public\/|\/download\/|datafile|resource/i.test(value);
-  }
-
-  private downloadCandidateScore(url: string): number {
-    const value = url.toLowerCase();
-    let score = 0;
-    if (value.includes('/static/public/')) score += 20;
-    if (value.includes('/download/')) score += 15;
-    if (value.endsWith('.zip') || value.includes('.zip?')) score += 12;
-    if (value.endsWith('.parquet') || value.includes('.parquet?')) score += 11;
-    if (value.endsWith('.csv') || value.includes('.csv?')) score += 10;
-    if (value.endsWith('.arff') || value.includes('.arff?')) score += 9;
-    if (value.endsWith('.tsv') || value.includes('.tsv?')) score += 8;
-    if (value.endsWith('.jsonl') || value.includes('.jsonl?')) score += 7;
-    if (value.endsWith('.json') || value.includes('.json?')) score += 2;
-    return score;
   }
 
   private extractHuggingFaceRepo(sourceUrl?: string): string | undefined {

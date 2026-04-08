@@ -9,6 +9,9 @@ import { OpenMlDatasetsConnector } from './collection/connectors/openml-datasets
 import { SeedCatalogConnector } from './collection/connectors/seed-catalog.connector';
 import { SerpApiKnowledgeConnector } from './collection/connectors/serpapi-knowledge.connector';
 import { UciDatasetsConnector } from './collection/connectors/uci-datasets.connector';
+import { CollectionGenericHtmlLlmService } from './collection/collection-generic-html-llm.service';
+import { CollectionHtmlExtractionService } from './collection/collection-html-extraction.service';
+import { CollectionLlmClientService } from './collection/collection-llm-client.service';
 import { CollectionLlmService } from './collection/collection-llm.service';
 import { CollectionNormalizerService } from './collection/collection-normalizer.service';
 import { CollectionOrchestratorService } from './collection/collection-orchestrator.service';
@@ -31,7 +34,10 @@ import { StoreService } from './store/store.service';
     OpenMlDatasetsConnector,
     CollectionConnectorRegistryService,
     CollectionPlannerService,
+    CollectionLlmClientService,
     CollectionLlmService,
+    CollectionGenericHtmlLlmService,
+    CollectionHtmlExtractionService,
     CollectionNormalizerService,
     CollectionWebRoutingService,
     CollectionOrchestratorService,

@@ -1,7 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { nowIso } from '../common/time';
 import type {
-  CollectionExtractionMethod,
   CollectionSourceClassification,
   CollectionSourceConfidence,
   CollectionSourceId,
@@ -9,14 +7,14 @@ import type {
 import {
   buildDatasetEntry,
   buildKnowledgeEntry,
-  collapseWhitespace,
-  fetchText,
-  stripHtml,
 } from './connectors/connector.utils';
 import {
   detectKnownSource,
   genericFetchLimit,
 } from './collection-layer.config';
+import { CollectionHtmlExtractionService } from './collection-html-extraction.service';
+import { CollectionGenericHtmlLlmService } from './collection-generic-html-llm.service';
+import { previewLlmText } from './collection-llm.utils';
 import type {
   DatasetDiscoveryHit,
   FetchedDocument,
@@ -30,18 +28,13 @@ type ProcessingOutcome<T extends KnowledgeDiscoveryHit | DatasetDiscoveryHit> = 
   fetchedDocuments: FetchedDocument[];
 };
 
-type ExtractedHtmlMetadata = {
-  title?: string;
-  description?: string;
-  publisher?: string;
-  licenseHint?: string;
-  directDownloadAvailable: boolean;
-  linkCandidates: string[];
-  downloadUrl?: string;
-};
-
 @Injectable()
 export class CollectionWebRoutingService {
+  constructor(
+    private readonly htmlExtractionService: CollectionHtmlExtractionService,
+    private readonly genericHtmlLlmService: CollectionGenericHtmlLlmService,
+  ) {}
+
   async annotateStructuredKnowledgeHits(
     hits: KnowledgeDiscoveryHit[],
   ): Promise<ProcessingOutcome<KnowledgeDiscoveryHit>> {
@@ -124,7 +117,7 @@ export class CollectionWebRoutingService {
 
         if (layer === 'generic' && sourceClassification === 'unknown' && url && fetchBudget > 0) {
           fetchBudget -= 1;
-          const fetched = await this.tryFetchDocument(hit.id, url, 'html');
+          const fetched = await this.htmlExtractionService.fetchDocument(hit.id, url, 'html');
           if (fetched) {
             fetchedDocuments.push(fetched.document);
             updatedHit = {
@@ -220,7 +213,7 @@ export class CollectionWebRoutingService {
           extractionMethod: layer === 'structured' ? 'direct' : undefined,
           extractionReliability: layer === 'structured' ? hit.sourceReliability : 0.65,
           directDownloadAvailable:
-            this.hasDirectDownloadSuffix(url) || hit.directDownloadAvailable,
+            this.htmlExtractionService.isDirectFileUrl(url) || hit.directDownloadAvailable,
         };
 
         if (layer === 'generic' && sourceClassification === 'known' && routedConnector) {
@@ -251,42 +244,105 @@ export class CollectionWebRoutingService {
 
         if (layer === 'generic' && sourceClassification === 'unknown' && url && fetchBudget > 0) {
           fetchBudget -= 1;
-          const fetched = await this.tryFetchDocument(hit.id, url, 'html');
+          const fetched = await this.htmlExtractionService.fetchDocument(hit.id, url, 'html');
           if (fetched) {
+            const planned = await this.genericHtmlLlmService.planDocument({
+              pageUrl: url,
+              detectedHost,
+              currentTitle: updatedHit.entry.name,
+              currentDescription: updatedHit.entry.description,
+              extractedText: fetched.document.extractedText,
+              linkCandidates: fetched.metadata.linkCandidates,
+              matchedQueries: updatedHit.matchedQueries,
+              matchedTerms: updatedHit.matchedTerms,
+            });
+            const plannerDownloadUrl = planned?.plan.selectedDownloadCandidates[0];
+            const plannerDirectDownloadUrl =
+              plannerDownloadUrl && this.htmlExtractionService.isDirectFileUrl(plannerDownloadUrl)
+                ? plannerDownloadUrl
+                : undefined;
+            const plannerFollowUrl = planned?.plan.selectedFollowLinks[0];
+            const plannerDescription = planned?.plan.summary;
+            const plannerProvider = planned?.plan.provider;
+            const plannerTitle = planned?.plan.title;
+            const plannerLicense = planned?.plan.licenseHint;
+            const plannerHint = planned
+              ? `Generic HTML LLM plan from ${detectedHost || 'web'}: ${planned.plan.reason}`
+              : undefined;
+
+            fetched.document.llmPlannerUsed = planned != null;
+            fetched.document.llmPlanRawPreview = planned
+              ? previewLlmText(planned.rawOutput, 320)
+              : null;
+            fetched.document.llmPlan = planned?.plan ?? null;
             fetchedDocuments.push(fetched.document);
+
             updatedHit = {
               ...updatedHit,
               entry: buildDatasetEntry({
                 ...updatedHit.entry,
-                name: fetched.metadata.title || updatedHit.entry.name,
-                provider: updatedHit.entry.provider || detectedHost || 'web',
-                description: fetched.metadata.description || updatedHit.entry.description,
-                licenseHint: fetched.metadata.licenseHint || updatedHit.entry.licenseHint,
-                downloadUrl: fetched.metadata.downloadUrl || updatedHit.entry.downloadUrl || updatedHit.entry.sourceUrl,
+                name:
+                  plannerTitle ||
+                  fetched.metadata.title ||
+                  updatedHit.entry.name,
+                provider:
+                  plannerProvider ||
+                  updatedHit.entry.provider ||
+                  detectedHost ||
+                  'web',
+                description:
+                  plannerDescription ||
+                  fetched.metadata.description ||
+                  updatedHit.entry.description,
+                licenseHint:
+                  plannerLicense ||
+                  fetched.metadata.licenseHint ||
+                  updatedHit.entry.licenseHint,
+                downloadUrl:
+                  plannerDirectDownloadUrl ||
+                  plannerDownloadUrl ||
+                  fetched.metadata.downloadUrl ||
+                  plannerFollowUrl ||
+                  updatedHit.entry.downloadUrl ||
+                  updatedHit.entry.sourceUrl,
                 downloadMethod:
-                  fetched.metadata.downloadUrl
+                  plannerDirectDownloadUrl || fetched.metadata.downloadUrl
                     ? 'direct'
                     : updatedHit.entry.downloadMethod || 'source-page',
                 downloadHint:
-                  fetched.metadata.downloadUrl
-                    ? 'Direct file URL discovered during generic HTML extraction.'
-                    : updatedHit.entry.downloadHint || 'Open the source page and inspect dataset or download links.',
+                  plannerDirectDownloadUrl
+                    ? 'Direct file URL selected by collection generic HTML LLM plan.'
+                    : fetched.metadata.downloadUrl
+                      ? 'Direct file URL discovered during generic HTML extraction.'
+                      : updatedHit.entry.downloadHint || 'Open the source page and inspect dataset or download links.',
                 downloadReference:
-                  fetched.metadata.downloadUrl || updatedHit.entry.downloadReference || updatedHit.entry.sourceUrl,
+                  plannerDirectDownloadUrl ||
+                  plannerDownloadUrl ||
+                  plannerFollowUrl ||
+                  fetched.metadata.downloadUrl ||
+                  updatedHit.entry.downloadReference ||
+                  updatedHit.entry.sourceUrl,
                 retrievalHint: this.joinHints(
-                  updatedHit.entry.retrievalHint,
-                  `Generic HTML extraction from ${detectedHost || 'web'}`,
+                  this.joinHints(
+                    updatedHit.entry.retrievalHint,
+                    `Generic HTML extraction from ${detectedHost || 'web'}`,
+                  ),
+                  plannerHint,
                 ),
                 tags: [
                   ...updatedHit.entry.tags,
                   ...(fetched.metadata.linkCandidates ?? []),
                 ],
               }),
-              text: `${fetched.metadata.title || updatedHit.title} ${fetched.metadata.description || updatedHit.text}`,
+              text: `${plannerTitle || fetched.metadata.title || updatedHit.title} ${
+                plannerDescription || fetched.metadata.description || updatedHit.text
+              }`,
               extractionMethod: 'html',
-              extractionReliability: 0.56,
+              extractionReliability: planned ? 0.64 : 0.56,
               directDownloadAvailable:
-                fetched.metadata.directDownloadAvailable || updatedHit.directDownloadAvailable,
+                Boolean(plannerDirectDownloadUrl) ||
+                fetched.metadata.directDownloadAvailable ||
+                updatedHit.directDownloadAvailable,
             };
           }
         }
@@ -305,133 +361,8 @@ export class CollectionWebRoutingService {
     };
   }
 
-  private async tryFetchDocument(
-    sourceHitId: string,
-    url: string,
-    extractionMethod: CollectionExtractionMethod,
-  ): Promise<{ document: FetchedDocument; metadata: ExtractedHtmlMetadata } | null> {
-    try {
-      const html = await fetchText(url);
-      const metadata = this.extractHtmlMetadata(html, url);
-      return {
-        document: {
-          sourceHitId,
-          url,
-          finalUrl: url,
-          extractedText: collapseWhitespace(stripHtml(html)).slice(0, 4000),
-          metadata,
-          extractionMethod,
-          retrievedAt: nowIso(),
-        },
-        metadata,
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  private extractHtmlMetadata(html: string, pageUrl: string): ExtractedHtmlMetadata {
-    const title =
-      this.extractMetaContent(html, 'property', 'og:title') ||
-      this.extractMetaContent(html, 'name', 'twitter:title') ||
-      this.extractTagText(html, 'title');
-    const description =
-      this.extractMetaContent(html, 'name', 'description') ||
-      this.extractMetaContent(html, 'property', 'og:description') ||
-      collapseWhitespace(stripHtml(html)).slice(0, 320);
-    const publisher =
-      this.extractMetaContent(html, 'name', 'author') ||
-      this.extractMetaContent(html, 'property', 'article:publisher');
-    const licenseHint = this.extractLicenseHint(html);
-    const linkCandidates = this.extractLinkCandidates(html, pageUrl);
-
-    return {
-      title: title ? collapseWhitespace(title).slice(0, 180) : undefined,
-      description: description ? collapseWhitespace(description).slice(0, 320) : undefined,
-      publisher: publisher ? collapseWhitespace(publisher).slice(0, 140) : undefined,
-      licenseHint,
-      directDownloadAvailable: linkCandidates.some((candidate) => this.hasDirectDownloadSuffix(candidate)),
-      linkCandidates,
-      downloadUrl: linkCandidates.find((candidate) => this.hasDirectDownloadSuffix(candidate)),
-    };
-  }
-
-  private extractMetaContent(html: string, attribute: 'name' | 'property', value: string): string | undefined {
-    const pattern = new RegExp(
-      `<meta[^>]+${attribute}=["']${value}["'][^>]+content=["']([^"']+)["'][^>]*>`,
-      'i',
-    );
-    const reversePattern = new RegExp(
-      `<meta[^>]+content=["']([^"']+)["'][^>]+${attribute}=["']${value}["'][^>]*>`,
-      'i',
-    );
-    return pattern.exec(html)?.[1] || reversePattern.exec(html)?.[1] || undefined;
-  }
-
-  private extractTagText(html: string, tagName: string): string | undefined {
-    const match = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, 'i').exec(html);
-    return match?.[1] ? stripHtml(match[1]) : undefined;
-  }
-
-  private extractLicenseHint(html: string): string | undefined {
-    const text = collapseWhitespace(stripHtml(html)).toLowerCase();
-    const match = text.match(/license[:\s]+([a-z0-9 .,+-]{3,80})/i);
-    return match?.[1] ? collapseWhitespace(match[1]) : undefined;
-  }
-
-  private extractLinkCandidates(html: string, pageUrl: string): string[] {
-    const matches = [...html.matchAll(/href=["']([^"']+)["']/gi)];
-    const base = (() => {
-      try {
-        return new URL(pageUrl);
-      } catch {
-        return null;
-      }
-    })();
-
-    const links = matches
-      .map((match) => match[1]?.trim())
-      .filter(Boolean)
-      .map((href) => {
-        if (!href) {
-          return '';
-        }
-        if (/^https?:\/\//i.test(href)) {
-          return href;
-        }
-        if (!base) {
-          return href;
-        }
-        try {
-          return new URL(href, base).toString();
-        } catch {
-          return href;
-        }
-      })
-      .filter((candidate) =>
-        /\.(csv|tsv|json|jsonl|zip|gz|parquet|xlsx?)($|\?)/i.test(candidate) ||
-        /download|dataset|datafile|resource/i.test(candidate),
-      );
-
-    return [...new Set(links)].slice(0, 8);
-  }
-
   private hostFromUrl(url?: string): string | undefined {
-    if (!url) {
-      return undefined;
-    }
-    try {
-      return new URL(url).hostname.replace(/^www\./, '');
-    } catch {
-      return undefined;
-    }
-  }
-
-  private hasDirectDownloadSuffix(url?: string): boolean {
-    if (!url) {
-      return false;
-    }
-    return /\.(csv|tsv|json|jsonl|zip|gz|parquet|xlsx?)($|\?)/i.test(url);
+    return this.htmlExtractionService.hostFromUrl(url);
   }
 
   private structuredConfidence(connector: CollectionSourceId): CollectionSourceConfidence {

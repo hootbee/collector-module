@@ -14,6 +14,12 @@ export type CollectionSourceClassification = 'known' | 'unknown';
 export type CollectionSourceConfidence = 'high' | 'medium' | 'low';
 export type CollectionExtractionMethod = 'direct' | 'html' | 'browser';
 export type CollectionDownloadMethod = 'direct' | 'source-page' | 'api' | 'cli';
+export type CollectionGenericPageType =
+  | 'dataset-landing'
+  | 'direct-file'
+  | 'knowledge-page'
+  | 'generic-page'
+  | 'unsupported';
 export type TaskSignal =
   | 'classification'
   | 'regression'
@@ -243,6 +249,18 @@ export type CollectionLlmPlan = {
   notes: string[];
 };
 
+export type CollectionGenericHtmlLlmPlan = {
+  pageType: CollectionGenericPageType;
+  confidence: number;
+  title?: string;
+  provider?: string;
+  summary?: string;
+  licenseHint?: string;
+  selectedDownloadCandidates: string[];
+  selectedFollowLinks: string[];
+  reason: string;
+};
+
 export type CollectedKnowledgeHit = {
   id: string;
   connector: CollectionSourceId;
@@ -330,6 +348,9 @@ export type CollectionFetchedDocument = {
   metadata?: Record<string, unknown>;
   extractionMethod: CollectionExtractionMethod;
   retrievedAt: string;
+  llmPlannerUsed?: boolean;
+  llmPlanRawPreview?: string | null;
+  llmPlan?: CollectionGenericHtmlLlmPlan | null;
 };
 
 export type CollectionJobStatusResponse = {

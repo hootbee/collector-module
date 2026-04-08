@@ -1,5 +1,6 @@
 import type {
   CollectionExtractionMethod,
+  CollectionGenericHtmlLlmPlan,
   CollectionLayer,
   CollectionSourceClassification,
   CollectionSourceConfidence,
@@ -50,6 +51,9 @@ export type FetchedDocument = {
   metadata?: Record<string, unknown>;
   extractionMethod: CollectionExtractionMethod;
   retrievedAt: string;
+  llmPlannerUsed?: boolean;
+  llmPlanRawPreview?: string | null;
+  llmPlan?: CollectionGenericHtmlLlmPlan | null;
 };
 
 export type RoutedHit = {

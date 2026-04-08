@@ -104,6 +104,31 @@ function buildRunSettings(input: {
           15000,
       ),
     },
+    genericHtmlLlm: {
+      enabled: envBoolean('COLLECTION_GENERIC_HTML_LLM_ENABLED', false),
+      strictFailure: envBoolean('COLLECTION_GENERIC_HTML_LLM_STRICT', false),
+      provider: process.env.COLLECTION_LLM_PROVIDER?.trim() || process.env.LLM_PROVIDER?.trim() || 'rule-based',
+      baseUrl:
+        process.env.COLLECTION_LLM_BASE_URL?.trim() ||
+        process.env.LLM_BASE_URL?.trim() ||
+        process.env.OPENAI_BASE_URL?.trim() ||
+        null,
+      model:
+        process.env.COLLECTION_LLM_MODEL?.trim() ||
+        process.env.LLM_MODEL?.trim() ||
+        process.env.OPENAI_MODEL?.trim() ||
+        null,
+      apiMode:
+        process.env.COLLECTION_LLM_API_MODE?.trim() ||
+        process.env.LLM_API_MODE?.trim() ||
+        null,
+      timeoutMs: Number(
+        process.env.COLLECTION_LLM_TIMEOUT_MS ??
+          process.env.LLM_TIMEOUT_MS ??
+          process.env.OPENAI_TIMEOUT_MS ??
+          15000,
+      ),
+    },
     connectorFlags: {
       'seed-catalog': envBoolean('COLLECTION_ENABLE_SEED_CONNECTOR', envBoolean('DISCOVERY_ENABLE_SEED_CONNECTOR', true)),
       huggingface: envBoolean('COLLECTION_ENABLE_HF_CONNECTOR', envBoolean('DISCOVERY_ENABLE_HF_CONNECTOR', false)),
@@ -220,6 +245,7 @@ function buildSummary(
     connectorStatuses: results.connectorStatuses,
     routedHitCount: results.routedHits.length,
     fetchedDocumentCount: results.fetchedDocuments.length,
+    genericHtmlPlannerDocumentCount: results.fetchedDocuments.filter((item) => item.llmPlannerUsed).length,
     rawKnowledgeCount: results.rawKnowledgeHits.length,
     rawDatasetCount: results.rawDatasetHits.length,
     knowledgeCount: results.knowledgeItems.length,
@@ -243,6 +269,9 @@ function buildDetailed(
       finalUrl: item.finalUrl,
       extractionMethod: item.extractionMethod,
       retrievedAt: item.retrievedAt,
+      llmPlannerUsed: item.llmPlannerUsed ?? false,
+      llmPlanRawPreview: item.llmPlanRawPreview ?? null,
+      llmPlan: item.llmPlan ?? null,
       metadataKeys: Object.keys(item.metadata ?? {}),
       metadata: item.metadata,
       extractedTextPreview: item.extractedText.slice(0, 240),

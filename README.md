@@ -168,12 +168,14 @@ curl -X POST http://127.0.0.1:8787/api/v1/collection/jobs/<collectionJobId>/down
 - SerpAPI 기반 검색
 - known host면 전용 source로 재분류
 - unknown host면 generic HTML extraction
+- 필요하면 unknown HTML page에 대해서만 collection 전용 LLM planner로 다운로드 링크 후보를 재판단
 
 원칙:
 
 - structured source를 우선 사용
 - 결과가 부족할 때만 generic layer 사용
 - generic 결과는 provenance와 source classification을 함께 저장
+- unknown source HTML LLM은 보조 계층이며, structured source를 대체하지 않음
 
 ## Source별 준비 사항
 
@@ -308,6 +310,9 @@ COLLECTION_ENABLE_KAGGLE_CONNECTOR=false
 COLLECTION_ENABLE_SERPAPI_CONNECTOR=false
 COLLECTION_ENABLE_CROSSREF_CONNECTOR=false
 COLLECTION_ENABLE_OPENML_CONNECTOR=false
+COLLECTION_LLM_PLANNER_ENABLED=false
+COLLECTION_GENERIC_HTML_LLM_ENABLED=false
+COLLECTION_GENERIC_HTML_LLM_STRICT=false
 ```
 
 ## Collection LLM Planner
@@ -330,6 +335,26 @@ COLLECTION_LLM_TIMEOUT_MS=15000
 - planner가 꺼져 있으면 deterministic planner만 사용
 - planner가 켜져 있으면 서버 LLM으로 source-aware query 보강 시도
 - planner가 켜진 상태에서 **LLM 통신이 실패하면 collection job도 즉시 실패**
+
+## Generic HTML LLM Planner
+
+generic 2층 수집에서 unknown host HTML page를 만났을 때만 선택적으로 사용할 수 있습니다.
+
+예시:
+
+```bash
+COLLECTION_GENERIC_HTML_LLM_ENABLED=true
+COLLECTION_GENERIC_HTML_LLM_STRICT=false
+```
+
+동작 원칙:
+
+- structured source에는 적용하지 않음
+- unknown generic HTML page에만 적용
+- 페이지 안에 실제로 있는 `linkCandidates`만 선택 가능
+- URL을 상상해서 만들지 않음
+- 실패 시 기본값은 soft-fail이며 rule-based HTML extraction으로 계속 진행
+- `COLLECTION_GENERIC_HTML_LLM_STRICT=true`면 이 planner 실패도 예외로 올림
 
 ## Smoke 테스트
 
