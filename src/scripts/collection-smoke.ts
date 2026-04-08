@@ -9,6 +9,14 @@ import type {
 } from '../common/contracts';
 import { CollectionService } from '../collection/collection.service';
 
+function envBoolean(name: string, fallback = false): boolean {
+  const raw = process.env[name]?.trim().toLowerCase();
+  if (!raw) {
+    return fallback;
+  }
+  return ['1', 'true', 'yes', 'on'].includes(raw);
+}
+
 async function waitForCollectionJob(collectionService: CollectionService, jobId: string) {
   const waitAttempts = Number(process.env.COLLECTION_SMOKE_WAIT_ATTEMPTS ?? 80);
   const waitMs = Number(process.env.COLLECTION_SMOKE_WAIT_MS ?? 500);
@@ -53,6 +61,59 @@ function loadDetailMode(): 'summary' | 'detailed' | 'raw' {
 function loadSampleLimit(): number {
   const raw = Number(process.env.COLLECTION_SMOKE_SAMPLE_LIMIT ?? '10');
   return Number.isFinite(raw) && raw > 0 ? Math.min(raw, 30) : 10;
+}
+
+function buildRunSettings(input: {
+  query: string;
+  kind: 'dataset' | 'knowledge' | 'both';
+  sources: CollectionSourceId[];
+  detailMode: 'summary' | 'detailed' | 'raw';
+  sampleLimit: number;
+}) {
+  return {
+    query: input.query,
+    kind: input.kind,
+    requestedSources: input.sources,
+    detailMode: input.detailMode,
+    sampleLimit: input.sampleLimit,
+    waitPolicy: {
+      waitAttempts: Number(process.env.COLLECTION_SMOKE_WAIT_ATTEMPTS ?? 80),
+      waitMs: Number(process.env.COLLECTION_SMOKE_WAIT_MS ?? 500),
+    },
+    llmPlanner: {
+      enabled: envBoolean('COLLECTION_LLM_PLANNER_ENABLED', false),
+      provider: process.env.COLLECTION_LLM_PROVIDER?.trim() || process.env.LLM_PROVIDER?.trim() || 'rule-based',
+      baseUrl:
+        process.env.COLLECTION_LLM_BASE_URL?.trim() ||
+        process.env.LLM_BASE_URL?.trim() ||
+        process.env.OPENAI_BASE_URL?.trim() ||
+        null,
+      model:
+        process.env.COLLECTION_LLM_MODEL?.trim() ||
+        process.env.LLM_MODEL?.trim() ||
+        process.env.OPENAI_MODEL?.trim() ||
+        null,
+      apiMode:
+        process.env.COLLECTION_LLM_API_MODE?.trim() ||
+        process.env.LLM_API_MODE?.trim() ||
+        null,
+      timeoutMs: Number(
+        process.env.COLLECTION_LLM_TIMEOUT_MS ??
+          process.env.LLM_TIMEOUT_MS ??
+          process.env.OPENAI_TIMEOUT_MS ??
+          15000,
+      ),
+    },
+    connectorFlags: {
+      'seed-catalog': envBoolean('COLLECTION_ENABLE_SEED_CONNECTOR', envBoolean('DISCOVERY_ENABLE_SEED_CONNECTOR', true)),
+      huggingface: envBoolean('COLLECTION_ENABLE_HF_CONNECTOR', envBoolean('DISCOVERY_ENABLE_HF_CONNECTOR', false)),
+      openml: envBoolean('COLLECTION_ENABLE_OPENML_CONNECTOR', envBoolean('DISCOVERY_ENABLE_OPENML_CONNECTOR', false)),
+      uci: envBoolean('COLLECTION_ENABLE_UCI_CONNECTOR', envBoolean('DISCOVERY_ENABLE_UCI_CONNECTOR', false)),
+      kaggle: envBoolean('COLLECTION_ENABLE_KAGGLE_CONNECTOR', envBoolean('DISCOVERY_ENABLE_KAGGLE_CONNECTOR', false)),
+      serpapi: envBoolean('COLLECTION_ENABLE_SERPAPI_CONNECTOR', envBoolean('DISCOVERY_ENABLE_SERPAPI_CONNECTOR', false)),
+      crossref: envBoolean('COLLECTION_ENABLE_CROSSREF_CONNECTOR', envBoolean('DISCOVERY_ENABLE_CROSSREF_CONNECTOR', false)),
+    },
+  };
 }
 
 function summarizeKnowledgeItem(item: ExternalKnowledgeItem) {
@@ -129,8 +190,13 @@ function summarizeRawDatasetHit(hit: CollectedDatasetHit) {
   };
 }
 
-function buildSummary(results: CollectionJobResultsResponse, sampleLimit: number) {
+function buildSummary(
+  results: CollectionJobResultsResponse,
+  sampleLimit: number,
+  runSettings: ReturnType<typeof buildRunSettings>,
+) {
   return {
+    runSettings,
     jobId: results.jobId,
     query: results.query,
     kind: results.kind,
@@ -139,6 +205,8 @@ function buildSummary(results: CollectionJobResultsResponse, sampleLimit: number
     knowledgeQueries: results.knowledgeQueries,
     mustInclude: results.mustInclude,
     mustAvoid: results.mustAvoid,
+    llmPlannerUsed: results.llmPlan != null,
+    llmPlannerRawCaptured: results.llmPlanRaw != null,
     llmPlanRaw: results.llmPlanRaw,
     llmPlan: results.llmPlan,
     connectorStatuses: results.connectorStatuses,
@@ -154,9 +222,13 @@ function buildSummary(results: CollectionJobResultsResponse, sampleLimit: number
   };
 }
 
-function buildDetailed(results: CollectionJobResultsResponse, sampleLimit: number) {
+function buildDetailed(
+  results: CollectionJobResultsResponse,
+  sampleLimit: number,
+  runSettings: ReturnType<typeof buildRunSettings>,
+) {
   return {
-    ...buildSummary(results, sampleLimit),
+    ...buildSummary(results, sampleLimit, runSettings),
     fetchedDocuments: results.fetchedDocuments.slice(0, sampleLimit).map((item) => ({
       sourceHitId: item.sourceHitId,
       url: item.url,
@@ -184,6 +256,13 @@ async function main() {
     const sources = loadSources();
     const detailMode = loadDetailMode();
     const sampleLimit = loadSampleLimit();
+    const runSettings = buildRunSettings({
+      query,
+      kind,
+      sources,
+      detailMode,
+      sampleLimit,
+    });
     const mustInclude = (process.env.COLLECTION_SMOKE_MUST_INCLUDE?.trim() || '')
       .split(',')
       .map((value) => value.trim())
@@ -203,10 +282,10 @@ async function main() {
     const results = await waitForCollectionJob(collectionService, job.jobId);
     const payload =
       detailMode === 'raw'
-        ? results
+        ? { runSettings, ...results }
         : detailMode === 'detailed'
-          ? buildDetailed(results, sampleLimit)
-          : buildSummary(results, sampleLimit);
+          ? buildDetailed(results, sampleLimit, runSettings)
+          : buildSummary(results, sampleLimit, runSettings);
     console.log(JSON.stringify(payload, null, 2));
   } finally {
     await app.close();

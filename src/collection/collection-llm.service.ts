@@ -93,6 +93,10 @@ export class CollectionLlmService {
     if (!this.enabled) {
       return false;
     }
+    return this.isConfigured();
+  }
+
+  private isConfigured(): boolean {
     if (this.provider === 'openai') {
       return this.apiKey.length > 0;
     }
@@ -110,8 +114,11 @@ export class CollectionLlmService {
     mustInclude: string[];
     mustAvoid: string[];
   }): Promise<ParsedLlmPlan | null> {
-    if (!this.isEnabled()) {
+    if (!this.enabled) {
       return null;
+    }
+    if (!this.isConfigured()) {
+      throw new Error('Collection LLM planner is enabled but LLM provider configuration is incomplete.');
     }
 
     const controller = new AbortController();
@@ -123,8 +130,7 @@ export class CollectionLlmService {
         : await this.callChatCompletions(input, controller.signal);
     } catch (error) {
       const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-      console.warn(`[CollectionLlmService] planner fallback to deterministic queries: ${message}`);
-      return null;
+      throw new Error(`Collection LLM planner request failed: ${message}`);
     } finally {
       clearTimeout(timeout);
     }
@@ -167,7 +173,7 @@ export class CollectionLlmService {
 
     const payload = (await response.json()) as Record<string, unknown>;
     const rawOutput = this.extractOutputText(payload) ?? JSON.stringify(payload);
-    const parsed = this.parsePlan(rawOutput);
+    const parsed = this.parsePlan(rawOutput, input);
     if (!parsed) {
       console.warn(
         `[CollectionLlmService] planner returned unparseable responses output: ${this.previewText(rawOutput)}`,
@@ -217,7 +223,7 @@ export class CollectionLlmService {
       choices?: Array<{ message?: { content?: string } }>;
     };
     const rawOutput = payload.choices?.[0]?.message?.content ?? '';
-    const parsed = this.parsePlan(rawOutput);
+    const parsed = this.parsePlan(rawOutput, input);
     if (!parsed) {
       console.warn(
         `[CollectionLlmService] planner returned unparseable chat output: ${this.previewText(rawOutput)}`,
@@ -241,7 +247,9 @@ export class CollectionLlmService {
   private systemPrompt(): string {
     return [
       'You assist only the collection module.',
-      'Return JSON only.',
+      'Return only one JSON object.',
+      'The first character must be "{" and the last character must be "}".',
+      'Do not include analysis, markdown, code fences, or explanations.',
       'Do not invent URLs, datasets, papers, providers, or sources.',
       'Use only the provided source IDs.',
       'Your job is to refine source-aware search queries, include keywords, and avoid keywords.',
@@ -264,10 +272,11 @@ export class CollectionLlmService {
       `allowedKnowledgeSources=${knowledgeSources.join(', ')}`,
       `allowedTaskSignals=${taskSignals.join(', ')}`,
       `allowedModalitySignals=${modalitySignals.join(', ')}`,
-      'Return a JSON object with keys: canonicalIntent, taskSignals, modalitySignals, mustInclude, mustAvoid, datasetSourceQueries, knowledgeSourceQueries, notes.',
+      'Return exactly one JSON object with keys: canonicalIntent, taskSignals, modalitySignals, mustInclude, mustAvoid, datasetSourceQueries, knowledgeSourceQueries, notes.',
       'Only include datasetSourceQueries for requested sources that are dataset-capable.',
       'Only include knowledgeSourceQueries for requested sources that are knowledge-capable.',
       'Keep queries short, source-aware, and realistic.',
+      'Do not write placeholder text such as "maybe", "for example", or "we need".',
     ].join('\n');
   }
 
@@ -330,26 +339,20 @@ export class CollectionLlmService {
     };
   }
 
-  private parsePlan(text: string): CollectionLlmPlan | null {
+  private parsePlan(
+    text: string,
+    input: Parameters<CollectionLlmService['planQueries']>[0],
+  ): CollectionLlmPlan | null {
     const jsonBlock = this.extractJsonBlock(text);
     if (!jsonBlock) {
-      return null;
+      return this.parseLoosePlan(text, input);
     }
-    const raw = JSON.parse(jsonBlock) as RawLlmPlan;
-    return {
-      canonicalIntent: raw.canonicalIntent?.trim() || '',
-      taskSignals: this.normalizeStringArray(raw.taskSignals).filter((value): value is TaskSignal =>
-        taskSignals.includes(value as TaskSignal),
-      ),
-      modalitySignals: this.normalizeStringArray(raw.modalitySignals).filter((value): value is ModalitySignal =>
-        modalitySignals.includes(value as ModalitySignal),
-      ),
-      mustInclude: this.normalizeStringArray(raw.mustInclude).slice(0, 12),
-      mustAvoid: this.normalizeStringArray(raw.mustAvoid).slice(0, 12),
-      datasetSourceQueries: this.normalizeQueryMap(raw.datasetSourceQueries, datasetSources),
-      knowledgeSourceQueries: this.normalizeQueryMap(raw.knowledgeSourceQueries, knowledgeSources),
-      notes: this.normalizeStringArray(raw.notes).slice(0, 6),
-    };
+    try {
+      const raw = JSON.parse(jsonBlock) as RawLlmPlan;
+      return this.normalizePlan(raw, input);
+    } catch {
+      return this.parseLoosePlan(text, input);
+    }
   }
 
   private normalizeStringArray(value: unknown): string[] {
@@ -365,6 +368,167 @@ export class CollectionLlmService {
         .filter(Boolean);
     }
     return [];
+  }
+
+  private normalizePlan(
+    raw: RawLlmPlan,
+    input: Parameters<CollectionLlmService['planQueries']>[0],
+  ): CollectionLlmPlan | null {
+    const plan: CollectionLlmPlan = {
+      canonicalIntent: raw.canonicalIntent?.trim() || input.query,
+      taskSignals: this.normalizeSignals(raw.taskSignals, taskSignals, input.taskSignals),
+      modalitySignals: this.normalizeSignals(raw.modalitySignals, modalitySignals, input.modalitySignals),
+      mustInclude: this.normalizeStringArray(raw.mustInclude).slice(0, 12),
+      mustAvoid: this.normalizeStringArray(raw.mustAvoid).slice(0, 12),
+      datasetSourceQueries: this.normalizeQueryMap(raw.datasetSourceQueries, datasetSources),
+      knowledgeSourceQueries: this.normalizeQueryMap(raw.knowledgeSourceQueries, knowledgeSources),
+      notes: this.normalizeStringArray(raw.notes).slice(0, 6),
+    };
+
+    return this.hasMeaningfulPlan(plan) ? plan : null;
+  }
+
+  private parseLoosePlan(
+    text: string,
+    input: Parameters<CollectionLlmService['planQueries']>[0],
+  ): CollectionLlmPlan | null {
+    const plan: CollectionLlmPlan = {
+      canonicalIntent:
+        this.extractNamedString(text, 'canonicalIntent') ??
+        this.extractQuotedNear(text, 'canonicalIntent') ??
+        input.query,
+      taskSignals: this.extractSignals(text, taskSignals, input.taskSignals),
+      modalitySignals: this.extractSignals(text, modalitySignals, input.modalitySignals),
+      mustInclude: this.extractNamedStringList(text, 'mustInclude').slice(0, 12),
+      mustAvoid: this.extractNamedStringList(text, 'mustAvoid').slice(0, 12),
+      datasetSourceQueries: Object.fromEntries(
+        datasetSources.map((source) => [source, this.extractSourceQueries(text, source)]),
+      ) as Partial<Record<CollectionSourceId, string[]>>,
+      knowledgeSourceQueries: Object.fromEntries(
+        knowledgeSources.map((source) => [source, this.extractSourceQueries(text, source)]),
+      ) as Partial<Record<CollectionSourceId, string[]>>,
+      notes: this.extractNamedStringList(text, 'notes').slice(0, 6),
+    };
+
+    if (!this.hasMeaningfulPlan(plan)) {
+      return null;
+    }
+    if (plan.notes.length === 0) {
+      plan.notes = ['salvaged-from-freeform-output'];
+    }
+    return plan;
+  }
+
+  private normalizeSignals<T extends string>(
+    value: unknown,
+    allowed: readonly T[],
+    fallback: readonly T[],
+  ): T[] {
+    const normalized = this.normalizeStringArray(value)
+      .map((entry) => this.normalizeSignalName(entry, allowed))
+      .filter((entry): entry is T => entry != null);
+    return normalized.length > 0 ? normalized : [...fallback];
+  }
+
+  private normalizeSignalName<T extends string>(value: string, allowed: readonly T[]): T | null {
+    const normalized = value.trim().toLowerCase().replace(/[_\s]+/g, '-');
+    for (const candidate of allowed) {
+      const candidateNormalized = candidate.toLowerCase();
+      const candidateSpaced = candidateNormalized.replace(/-/g, ' ');
+      if (
+        normalized === candidateNormalized ||
+        normalized === candidateSpaced ||
+        normalized.includes(candidateNormalized) ||
+        normalized.includes(candidateSpaced)
+      ) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  private extractSignals<T extends string>(text: string, allowed: readonly T[], fallback: readonly T[]): T[] {
+    const lowered = text.toLowerCase();
+    const matched = allowed.filter((candidate) => {
+      const variants = [candidate.toLowerCase(), candidate.toLowerCase().replace(/-/g, ' ')];
+      return variants.some((variant) => lowered.includes(variant));
+    });
+    return matched.length > 0 ? matched : [...fallback];
+  }
+
+  private extractNamedString(text: string, key: string): string | null {
+    const escapedKey = this.escapeRegExp(key);
+    const quoted = new RegExp(`${escapedKey}\\s*[:=]\\s*"([^"]+)"`, 'i').exec(text);
+    if (quoted?.[1]?.trim()) {
+      return quoted[1].trim();
+    }
+    const singleQuoted = new RegExp(`${escapedKey}\\s*[:=]\\s*'([^']+)'`, 'i').exec(text);
+    if (singleQuoted?.[1]?.trim()) {
+      return singleQuoted[1].trim();
+    }
+    const plain = new RegExp(`${escapedKey}\\s*[:=]\\s*([^\\n\\r,}]+)`, 'i').exec(text);
+    return plain?.[1]?.trim() || null;
+  }
+
+  private extractQuotedNear(text: string, key: string): string | null {
+    const escapedKey = this.escapeRegExp(key);
+    const match = new RegExp(`${escapedKey}[\\s\\S]{0,160}?"([^"]{6,200})"`, 'i').exec(text);
+    return match?.[1]?.trim() || null;
+  }
+
+  private extractNamedStringList(text: string, key: string): string[] {
+    const escapedKey = this.escapeRegExp(key);
+    const arrayMatch = new RegExp(`${escapedKey}\\s*[:=]\\s*\\[([\\s\\S]{0,400}?)\\]`, 'i').exec(text);
+    if (arrayMatch?.[1]) {
+      return this.extractQuotedStrings(arrayMatch[1]).slice(0, 12);
+    }
+    const lineMatch = new RegExp(`${escapedKey}\\s*[:=]\\s*([^\\n\\r}]+)`, 'i').exec(text);
+    if (!lineMatch?.[1]) {
+      return [];
+    }
+    return lineMatch[1]
+      .split(/,|\|/)
+      .map((item) => item.replace(/^[-*]\s*/, '').trim())
+      .filter(Boolean)
+      .slice(0, 12);
+  }
+
+  private extractSourceQueries(text: string, source: CollectionSourceId): string[] {
+    const escapedSource = this.escapeRegExp(source);
+    const arrayMatch = new RegExp(`${escapedSource}\\s*[:=]\\s*\\[([\\s\\S]{0,500}?)\\]`, 'i').exec(text);
+    if (arrayMatch?.[1]) {
+      return this.extractQuotedStrings(arrayMatch[1]).slice(0, 8);
+    }
+    const lineMatch = new RegExp(`${escapedSource}\\s*[:=]\\s*([^\\n\\r}]+)`, 'i').exec(text);
+    if (!lineMatch?.[1]) {
+      return [];
+    }
+    return lineMatch[1]
+      .split(/,|\|/)
+      .map((item) => item.replace(/^[-*]\s*/, '').trim())
+      .filter((item) => item.length >= 3 && !/^(none|n\/a|null)$/i.test(item))
+      .slice(0, 8);
+  }
+
+  private extractQuotedStrings(text: string): string[] {
+    return [...text.matchAll(/"([^"]+)"|'([^']+)'/g)]
+      .map((match) => (match[1] ?? match[2] ?? '').trim())
+      .filter(Boolean);
+  }
+
+  private hasMeaningfulPlan(plan: CollectionLlmPlan): boolean {
+    return Boolean(
+      plan.canonicalIntent.trim() ||
+        plan.mustInclude.length > 0 ||
+        plan.mustAvoid.length > 0 ||
+        plan.notes.length > 0 ||
+        Object.values(plan.datasetSourceQueries).some((items) => (items ?? []).length > 0) ||
+        Object.values(plan.knowledgeSourceQueries).some((items) => (items ?? []).length > 0),
+    );
+  }
+
+  private escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   private normalizeQueryMap<T extends CollectionSourceId>(
