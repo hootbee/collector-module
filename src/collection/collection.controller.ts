@@ -5,6 +5,7 @@ import type {
   ModalitySignal,
   TaskSignal,
 } from '../common/contracts';
+import { CollectionDownloadService } from './collection-download.service';
 import { CollectionService } from './collection.service';
 
 const collectionKinds: CollectionKind[] = ['dataset', 'knowledge', 'both'];
@@ -20,7 +21,10 @@ const collectionSources: CollectionSourceId[] = [
 
 @Controller('collection')
 export class CollectionController {
-  constructor(private readonly collectionService: CollectionService) {}
+  constructor(
+    private readonly collectionService: CollectionService,
+    private readonly collectionDownloadService: CollectionDownloadService,
+  ) {}
 
   @Post('jobs')
   async createJob(
@@ -87,5 +91,36 @@ export class CollectionController {
   @Get('jobs/:jobId/results')
   getJobResults(@Param('jobId') jobId: string) {
     return this.collectionService.getResults(jobId);
+  }
+
+  @Post('jobs/:jobId/downloads')
+  createDownloadJob(
+    @Param('jobId') jobId: string,
+    @Body()
+    body: {
+      itemIds?: string[];
+      targetDir?: string;
+      maxFilesPerItem?: number;
+    },
+  ) {
+    const itemIds = Array.isArray(body.itemIds)
+      ? body.itemIds.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      : undefined;
+    return this.collectionDownloadService.createDownloadJob({
+      collectionJobId: jobId,
+      itemIds,
+      targetDir: body.targetDir,
+      maxFilesPerItem: body.maxFilesPerItem,
+    });
+  }
+
+  @Get('downloads/:downloadJobId')
+  getDownloadJobStatus(@Param('downloadJobId') downloadJobId: string) {
+    return this.collectionDownloadService.getStatus(downloadJobId);
+  }
+
+  @Get('downloads/:downloadJobId/results')
+  getDownloadJobResults(@Param('downloadJobId') downloadJobId: string) {
+    return this.collectionDownloadService.getResults(downloadJobId);
   }
 }

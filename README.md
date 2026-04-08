@@ -8,6 +8,7 @@
 - collection job 생성
 - 외부 source 수집
 - raw/normalized 결과 저장
+- 선택한 dataset의 원본 파일 다운로드
 - source별 provenance 저장
 - collection 전용 LLM planner
 - structured source 우선 + generic web fallback
@@ -58,6 +59,9 @@ npm run start:watch
 - `POST /api/v1/collection/jobs`
 - `GET /api/v1/collection/jobs/:jobId`
 - `GET /api/v1/collection/jobs/:jobId/results`
+- `POST /api/v1/collection/jobs/:jobId/downloads`
+- `GET /api/v1/collection/downloads/:downloadJobId`
+- `GET /api/v1/collection/downloads/:downloadJobId/results`
 
 ## Collection 요청 형식
 
@@ -83,6 +87,70 @@ npm run start:watch
 - `sources`: 사용할 source 목록
 - `mustInclude`: 반드시 포함되면 좋은 키워드
 - `mustAvoid`: 피하고 싶은 키워드
+
+## 원본 데이터 다운로드
+
+collection 결과의 `datasetItems`에는 다음 메타데이터가 포함됩니다.
+
+- `downloadUrl`
+- `downloadMethod`
+- `downloadHint`
+- `downloadReference`
+
+이 정보를 바탕으로 서버가 실제 원본 파일을 다운로드할 수 있습니다.
+
+다운로드 job 생성 예시:
+
+```json
+{
+  "itemIds": ["hf:ardavey/human-ai-generated-text"],
+  "targetDir": "storage/downloads/manual-run",
+  "maxFilesPerItem": 2
+}
+```
+
+호출:
+
+```bash
+curl -X POST http://127.0.0.1:8787/api/v1/collection/jobs/<collectionJobId>/downloads \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "itemIds": ["hf:ardavey/human-ai-generated-text"],
+    "targetDir": "storage/downloads/manual-run",
+    "maxFilesPerItem": 2
+  }'
+```
+
+다운로드 결과에는 실제 저장된 파일 경로가 포함됩니다.
+
+예:
+
+```json
+{
+  "itemResults": [
+    {
+      "itemId": "hf:ardavey/human-ai-generated-text",
+      "status": "completed",
+      "targetDir": "/abs/path/backend/storage/downloads/manual-run/Hugging-Face/...",
+      "files": [
+        {
+          "fileName": "train-00000-of-00001.parquet",
+          "path": "/abs/path/backend/storage/downloads/manual-run/Hugging-Face/.../train-00000-of-00001.parquet",
+          "bytes": 69276
+        }
+      ]
+    }
+  ]
+}
+```
+
+지원 방식:
+
+- Hugging Face: hub API로 데이터 파일 목록을 찾은 뒤 실제 파일 다운로드
+- OpenML: OpenML data URL 또는 API 기반 다운로드
+- Kaggle: Kaggle CLI `datasets download`
+- UCI: dataset page에서 실제 데이터 링크를 추출한 뒤 다운로드
+- generic source: direct file URL이 있거나 HTML에서 직접 링크를 찾을 수 있을 때만 다운로드
 
 ## 수집 구조
 
@@ -228,6 +296,10 @@ COLLECTION_HTTP_RETRY_COUNT=2
 COLLECTION_CONNECTOR_LIMIT_PER_SOURCE=10
 COLLECTION_GENERIC_FETCH_LIMIT=6
 COLLECTION_FETCHER_USER_AGENT=stage-one-backend/0.1
+COLLECTION_DOWNLOAD_STORAGE_ROOT=storage/downloads
+COLLECTION_DOWNLOAD_MAX_FILES_PER_ITEM=3
+COLLECTION_DOWNLOAD_MAX_BYTES=67108864
+COLLECTION_DOWNLOAD_TIMEOUT_MS=60000
 
 COLLECTION_ENABLE_SEED_CONNECTOR=true
 COLLECTION_ENABLE_HF_CONNECTOR=false
@@ -258,6 +330,31 @@ COLLECTION_LLM_TIMEOUT_MS=15000
 - planner가 꺼져 있으면 deterministic planner만 사용
 - planner가 켜져 있으면 서버 LLM으로 source-aware query 보강 시도
 - planner가 켜진 상태에서 **LLM 통신이 실패하면 collection job도 즉시 실패**
+
+## Smoke 테스트
+
+수집 smoke:
+
+```bash
+npm run collection:smoke
+```
+
+다운로드 smoke:
+
+```bash
+npm run collection:download:smoke
+```
+
+예시:
+
+```bash
+env \
+  COLLECTION_ENABLE_HF_CONNECTOR=true \
+  COLLECTION_DOWNLOAD_SMOKE_SOURCES=huggingface \
+  COLLECTION_DOWNLOAD_SMOKE_QUERY='human ai generated text dataset' \
+  COLLECTION_DOWNLOAD_SMOKE_ITEM_MATCH='ardavey' \
+  npm run collection:download:smoke
+```
 - 서버 LLM이 JSON을 깔끔하게 주지 않아도, 현재는 자유서술 응답을 일부 salvage해서 `llmPlan`으로 반영
 
 ## Smoke Test

@@ -372,6 +372,52 @@ export type CollectionJobResultsResponse = {
   datasetItems: ExternalDatasetItem[];
 };
 
+export type CollectionDownloadedFile = {
+  fileName: string;
+  path: string;
+  bytes: number;
+  sourceUrl?: string;
+  contentType?: string;
+};
+
+export type CollectionDownloadItemResult = {
+  itemId: string;
+  name: string;
+  provider: string;
+  status: 'completed' | 'failed';
+  sourceUrl?: string;
+  downloadUrl?: string;
+  downloadMethod?: CollectionDownloadMethod;
+  downloadHint?: string;
+  downloadReference?: string;
+  targetDir: string;
+  files: CollectionDownloadedFile[];
+  error?: string;
+};
+
+export type CollectionDownloadJobStatusResponse = {
+  downloadJobId: string;
+  collectionJobId: string;
+  status: DiscoveryJobStatus;
+  stage: string;
+  itemCount: number;
+  downloadedFileCount: number;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  error: string | null;
+};
+
+export type CollectionDownloadJobResultsResponse = {
+  downloadJobId: string;
+  collectionJobId: string;
+  status: DiscoveryJobStatus;
+  stage: string;
+  targetRoot: string;
+  requestedItemIds: string[];
+  itemResults: CollectionDownloadItemResult[];
+};
+
 export type SessionRecord = {
   id: string;
   createdAt: string;
@@ -439,6 +485,21 @@ export type CollectionJobRecord = {
   rawDatasetHits: CollectedDatasetHit[];
   knowledgeItems: ExternalKnowledgeItem[];
   datasetItems: ExternalDatasetItem[];
+};
+
+export type CollectionDownloadJobRecord = {
+  id: string;
+  collectionJobId: string;
+  requestedItemIds: string[];
+  targetRoot: string;
+  maxFilesPerItem: number;
+  status: DiscoveryJobStatus;
+  stage: string;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  error: string | null;
+  itemResults: CollectionDownloadItemResult[];
 };
 
 export type CreateDatasetInput = {

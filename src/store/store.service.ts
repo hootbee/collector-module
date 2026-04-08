@@ -2,6 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type {
   CollectionConnectorStatus,
+  CollectionDownloadItemResult,
+  CollectionDownloadJobRecord,
+  CollectionDownloadJobResultsResponse,
+  CollectionDownloadJobStatusResponse,
   CollectionJobRecord,
   CollectionJobResultsResponse,
   CollectionJobStatusResponse,
@@ -14,6 +18,7 @@ import { nowIso } from '../common/time';
 @Injectable()
 export class StoreService {
   private readonly collectionJobs = new Map<string, CollectionJobRecord>();
+  private readonly collectionDownloadJobs = new Map<string, CollectionDownloadJobRecord>();
 
   createCollectionJob(input: {
     query: string;
@@ -168,6 +173,108 @@ export class StoreService {
       rawDatasetHits: [...job.rawDatasetHits],
       knowledgeItems: [...job.knowledgeItems],
       datasetItems: [...job.datasetItems],
+    };
+  }
+
+  createCollectionDownloadJob(input: {
+    collectionJobId: string;
+    requestedItemIds: string[];
+    targetRoot: string;
+    maxFilesPerItem: number;
+  }): CollectionDownloadJobRecord {
+    const job: CollectionDownloadJobRecord = {
+      id: `download-${randomUUID().replace(/-/g, '').slice(0, 12)}`,
+      collectionJobId: input.collectionJobId,
+      requestedItemIds: [...input.requestedItemIds],
+      targetRoot: input.targetRoot,
+      maxFilesPerItem: input.maxFilesPerItem,
+      status: 'queued',
+      stage: 'waiting',
+      createdAt: nowIso(),
+      startedAt: null,
+      completedAt: null,
+      error: null,
+      itemResults: [],
+    };
+
+    this.collectionDownloadJobs.set(job.id, job);
+    return job;
+  }
+
+  getCollectionDownloadJob(downloadJobId: string): CollectionDownloadJobRecord | undefined {
+    return this.collectionDownloadJobs.get(downloadJobId);
+  }
+
+  startCollectionDownloadJob(downloadJobId: string, stage = 'downloading'): void {
+    const job = this.collectionDownloadJobs.get(downloadJobId);
+    if (!job) {
+      return;
+    }
+    job.status = 'running';
+    job.stage = stage;
+    job.startedAt = nowIso();
+  }
+
+  completeCollectionDownloadJob(
+    downloadJobId: string,
+    payload: {
+      itemResults: CollectionDownloadItemResult[];
+      stage?: string;
+    },
+  ): void {
+    const job = this.collectionDownloadJobs.get(downloadJobId);
+    if (!job) {
+      return;
+    }
+    job.status = 'completed';
+    job.stage = payload.stage ?? 'completed';
+    job.itemResults = [...payload.itemResults];
+    job.completedAt = nowIso();
+  }
+
+  failCollectionDownloadJob(downloadJobId: string, error: string): void {
+    const job = this.collectionDownloadJobs.get(downloadJobId);
+    if (!job) {
+      return;
+    }
+    job.status = 'failed';
+    job.stage = 'failed';
+    job.error = error;
+    job.completedAt = nowIso();
+  }
+
+  toCollectionDownloadJobStatus(downloadJobId: string): CollectionDownloadJobStatusResponse | undefined {
+    const job = this.collectionDownloadJobs.get(downloadJobId);
+    if (!job) {
+      return undefined;
+    }
+    return {
+      downloadJobId: job.id,
+      collectionJobId: job.collectionJobId,
+      status: job.status,
+      stage: job.stage,
+      itemCount: job.requestedItemIds.length,
+      downloadedFileCount: job.itemResults.reduce((sum, item) => sum + item.files.length, 0),
+      createdAt: job.createdAt,
+      startedAt: job.startedAt,
+      completedAt: job.completedAt,
+      error: job.error,
+    };
+  }
+
+  toCollectionDownloadJobResults(downloadJobId: string): CollectionDownloadJobResultsResponse | undefined {
+    const job = this.collectionDownloadJobs.get(downloadJobId);
+    if (!job) {
+      return undefined;
+    }
+    return {
+      downloadJobId: job.id,
+      collectionJobId: job.collectionJobId,
+      status: job.status,
+      stage: job.stage,
+      targetRoot: job.targetRoot,
+      requestedItemIds: [...job.requestedItemIds],
+      itemResults: [...job.itemResults],
     };
   }
 }

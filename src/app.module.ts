@@ -13,6 +13,7 @@ import { CollectionLlmService } from './collection/collection-llm.service';
 import { CollectionNormalizerService } from './collection/collection-normalizer.service';
 import { CollectionOrchestratorService } from './collection/collection-orchestrator.service';
 import { CollectionPlannerService } from './collection/collection-planner.service';
+import { CollectionDownloadService } from './collection/collection-download.service';
 import { CollectionService } from './collection/collection.service';
 import { CollectionWebRoutingService } from './collection/collection-web-routing.service';
 import { StoreService } from './store/store.service';
@@ -34,6 +35,7 @@ import { StoreService } from './store/store.service';
     CollectionNormalizerService,
     CollectionWebRoutingService,
     CollectionOrchestratorService,
+    CollectionDownloadService,
     CollectionService,
   ],
 })
