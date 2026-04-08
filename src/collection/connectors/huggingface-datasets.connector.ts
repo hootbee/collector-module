@@ -101,6 +101,10 @@ export class HuggingFaceDatasetsConnector implements DiscoveryConnector {
               modality: this.modalityLabel(tags),
               licenseHint: this.licenseHint(item),
               sourceUrl: `https://huggingface.co/datasets/${id}`,
+              downloadUrl: `https://huggingface.co/datasets/${id}`,
+              downloadMethod: 'source-page',
+              downloadHint: `Open the Hugging Face dataset page for ${id} and download files from the repo tree or hub API.`,
+              downloadReference: id,
               retrievalHint: `Matched Hugging Face query "${variant}" from base "${query}"`,
               tags,
             });

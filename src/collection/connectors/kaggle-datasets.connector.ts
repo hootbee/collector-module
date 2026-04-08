@@ -83,6 +83,10 @@ export class KaggleDatasetsConnector implements DiscoveryConnector {
             modality: this.inferModalityLabel(title, row),
             licenseHint: this.pick(row, ['licenseName', 'license']) || 'See Kaggle dataset page',
             sourceUrl: `https://www.kaggle.com/datasets/${ref}`,
+            downloadUrl: `https://www.kaggle.com/datasets/${ref}`,
+            downloadMethod: 'cli',
+            downloadHint: `Run: kaggle datasets download -d ${ref}`,
+            downloadReference: ref,
             retrievalHint: `Matched Kaggle query: ${query}${this.popularitySuffix(row)}`,
             tags: this.tags(query, ref, title, row),
           });

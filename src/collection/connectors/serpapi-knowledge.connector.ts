@@ -93,6 +93,12 @@ export class SerpApiKnowledgeConnector implements DiscoveryConnector {
             modality: this.modalityFromText(title, item.snippet ?? '', context),
             licenseHint: 'See source page',
             sourceUrl: link,
+            downloadUrl: link,
+            downloadMethod: this.hasDirectDownloadSuffix(link) ? 'direct' : 'source-page',
+            downloadHint: this.hasDirectDownloadSuffix(link)
+              ? 'Direct file URL discovered from web search result.'
+              : 'Open the source page and follow dataset or download links.',
+            downloadReference: link,
             providerDetail: provider,
             publisher: provider,
             retrievalHint: `Matched SerpAPI dataset query: ${query}`,
@@ -121,10 +127,11 @@ export class SerpApiKnowledgeConnector implements DiscoveryConnector {
             modalitySignals: entry.modalitySignals ?? [],
             modality: entry.modalityType ?? (context.modality === 'text' ? 'text' : 'table'),
             negativeTags: entry.negativeTags ?? [],
-            matchedQueries,
-            matchedTerms,
-            entry,
-          });
+              matchedQueries,
+              matchedTerms,
+              directDownloadAvailable: this.hasDirectDownloadSuffix(link),
+              entry,
+            });
           count += 1;
         }
 
@@ -330,5 +337,9 @@ export class SerpApiKnowledgeConnector implements DiscoveryConnector {
       return 'time series';
     }
     return context.modality === 'text' ? 'text corpus' : 'dataset';
+  }
+
+  private hasDirectDownloadSuffix(url: string): boolean {
+    return /\.(csv|tsv|json|jsonl|zip|gz|parquet|arff|xlsx?)($|\?)/i.test(url);
   }
 }

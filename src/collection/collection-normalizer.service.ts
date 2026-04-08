@@ -72,6 +72,10 @@ export class CollectionNormalizerService {
       publisher: hit.entry.publisher,
       sourceUrl: hit.entry.sourceUrl,
       retrievalHint: hit.entry.retrievalHint,
+      downloadUrl: hit.entry.downloadUrl,
+      downloadMethod: hit.entry.downloadMethod,
+      downloadHint: hit.entry.downloadHint,
+      downloadReference: hit.entry.downloadReference,
     }));
   }
 
@@ -129,6 +133,10 @@ export class CollectionNormalizerService {
           providerDetail: hit.entry.providerDetail,
           publisher: hit.entry.publisher,
           retrievalHint: hit.entry.retrievalHint,
+          downloadUrl: hit.entry.downloadUrl,
+          downloadMethod: hit.entry.downloadMethod,
+          downloadHint: hit.entry.downloadHint,
+          downloadReference: hit.entry.downloadReference,
           matchedReason: this.matchedReason(hit),
           layer: hit.layer,
           sourceClassification: hit.sourceClassification,
@@ -172,6 +180,9 @@ export class CollectionNormalizerService {
     }
     if (hit.directDownloadAvailable) {
       score += 4;
+    }
+    if (hit.kind === 'dataset' && hit.entry.downloadUrl?.trim()) {
+      score += 2;
     }
     score += (hit.metadataCompleteness ?? 0) * 10;
     if (hit.extractionMethod === 'browser') {

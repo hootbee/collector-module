@@ -13,6 +13,7 @@ export type CollectionLayer = 'structured' | 'generic';
 export type CollectionSourceClassification = 'known' | 'unknown';
 export type CollectionSourceConfidence = 'high' | 'medium' | 'low';
 export type CollectionExtractionMethod = 'direct' | 'html' | 'browser';
+export type CollectionDownloadMethod = 'direct' | 'source-page' | 'api' | 'cli';
 export type TaskSignal =
   | 'classification'
   | 'regression'
@@ -145,6 +146,10 @@ export type ExternalDatasetItem = {
   extractionMethod?: CollectionExtractionMethod;
   extractionReliability?: number;
   directDownloadAvailable?: boolean;
+  downloadUrl?: string;
+  downloadMethod?: CollectionDownloadMethod;
+  downloadHint?: string;
+  downloadReference?: string;
 };
 
 export type SelectedExternalResourcesRecord = {
@@ -298,6 +303,10 @@ export type CollectedDatasetHit = {
   publisher?: string;
   sourceUrl?: string;
   retrievalHint?: string;
+  downloadUrl?: string;
+  downloadMethod?: CollectionDownloadMethod;
+  downloadHint?: string;
+  downloadReference?: string;
 };
 
 export type CollectionRoutedHit = {
@@ -524,6 +533,10 @@ export type DatasetCatalogEntry = {
   providerDetail?: string;
   publisher?: string;
   retrievalHint?: string;
+  downloadUrl?: string;
+  downloadMethod?: CollectionDownloadMethod;
+  downloadHint?: string;
+  downloadReference?: string;
   modalityType?: 'text' | 'table' | 'hybrid';
   taskSignals?: TaskSignal[];
   modalitySignals?: ModalitySignal[];

@@ -105,6 +105,10 @@ export class UciDatasetsConnector implements DiscoveryConnector {
               modality: enriched.modality,
               licenseHint: 'See UCI dataset page',
               sourceUrl: enriched.sourceUrl,
+              downloadUrl: enriched.sourceUrl,
+              downloadMethod: 'source-page',
+              downloadHint: `Open the UCI dataset page for ${enriched.slug} and use the data folder or download links.`,
+              downloadReference: enriched.slug,
               retrievalHint: `Matched UCI search query: ${query}`,
               tags: [query, ...enriched.tags],
             });

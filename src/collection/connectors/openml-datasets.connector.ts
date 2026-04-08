@@ -132,6 +132,10 @@ export class OpenMlDatasetsConnector implements DiscoveryConnector {
               modality: this.modalityLabel(description, dataset),
               licenseHint: this.stringValue(description.licence) || 'See OpenML dataset page',
               sourceUrl: `https://www.openml.org/search?type=data&id=${id}`,
+              downloadUrl: this.downloadUrl(description, id),
+              downloadMethod: this.downloadMethod(description),
+              downloadHint: this.downloadHint(description, id),
+              downloadReference: id,
               retrievalHint: `Matched OpenML query "${variant}" from base "${query}"`,
               tags: this.tags(query, description, dataset),
             });
@@ -161,6 +165,7 @@ export class OpenMlDatasetsConnector implements DiscoveryConnector {
               negativeTags: entry.negativeTags ?? [],
               matchedQueries,
               matchedTerms,
+              directDownloadAvailable: this.hasDirectDownload(description),
               entry,
             });
             seenIds.add(id);
@@ -288,6 +293,41 @@ export class OpenMlDatasetsConnector implements DiscoveryConnector {
       ...tokenize(this.stringValue(description.creator)),
       ...tokenize(query),
     ]).slice(0, 28);
+  }
+
+  private downloadUrl(description: OpenMlDatasetDescription, id: string): string {
+    return (
+      this.stringValue(description.parquet_url) ||
+      this.stringValue(description.original_data_url) ||
+      this.stringValue(description.url) ||
+      `https://www.openml.org/search?type=data&id=${id}`
+    );
+  }
+
+  private downloadMethod(description: OpenMlDatasetDescription): 'direct' | 'api' {
+    if (this.hasDirectDownload(description)) {
+      return 'direct';
+    }
+    return 'api';
+  }
+
+  private downloadHint(description: OpenMlDatasetDescription, id: string): string {
+    const directUrl =
+      this.stringValue(description.parquet_url) ||
+      this.stringValue(description.original_data_url) ||
+      this.stringValue(description.url);
+    if (directUrl) {
+      return `Use the provided OpenML data URL or API metadata for dataset ${id}.`;
+    }
+    return `Open the OpenML dataset page for ${id} and follow the API/data links.`;
+  }
+
+  private hasDirectDownload(description: OpenMlDatasetDescription): boolean {
+    const candidate =
+      this.stringValue(description.parquet_url) ||
+      this.stringValue(description.original_data_url) ||
+      this.stringValue(description.url);
+    return Boolean(candidate && /\.(csv|tsv|json|jsonl|zip|gz|parquet|arff|xlsx?)($|\?)/i.test(candidate));
   }
 
   private qualityMap(qualities: OpenMlDatasetQuality[] | undefined): Map<string, string> {

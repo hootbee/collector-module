@@ -275,6 +275,10 @@ export function buildDatasetEntry(input: {
   providerDetail?: string;
   publisher?: string;
   retrievalHint?: string;
+  downloadUrl?: string;
+  downloadMethod?: DatasetCatalogEntry['downloadMethod'];
+  downloadHint?: string;
+  downloadReference?: string;
   domainIds?: string[];
   taskSignals?: TaskSignal[];
   modalitySignals?: ModalitySignal[];
@@ -298,6 +302,10 @@ export function buildDatasetEntry(input: {
     providerDetail: input.providerDetail,
     publisher: input.publisher,
     retrievalHint: input.retrievalHint,
+    downloadUrl: input.downloadUrl,
+    downloadMethod: input.downloadMethod,
+    downloadHint: input.downloadHint,
+    downloadReference: input.downloadReference,
     modalityType,
     taskSignals: input.taskSignals ?? inferTaskSignals(text, tags),
     modalitySignals: input.modalitySignals ?? inferModalitySignals(text, tags, modalityType),

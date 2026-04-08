@@ -37,6 +37,7 @@ type ExtractedHtmlMetadata = {
   licenseHint?: string;
   directDownloadAvailable: boolean;
   linkCandidates: string[];
+  downloadUrl?: string;
 };
 
 @Injectable()
@@ -228,6 +229,18 @@ export class CollectionWebRoutingService {
             entry: buildDatasetEntry({
               ...updatedHit.entry,
               provider: this.providerLabelForConnector(routedConnector),
+              downloadUrl:
+                updatedHit.entry.downloadUrl ||
+                this.knownSourceDownloadUrl(routedConnector, updatedHit.entry.sourceUrl),
+              downloadMethod:
+                updatedHit.entry.downloadMethod ||
+                this.knownSourceDownloadMethod(routedConnector),
+              downloadHint:
+                updatedHit.entry.downloadHint ||
+                this.knownSourceDownloadHint(routedConnector, updatedHit.entry.sourceUrl),
+              downloadReference:
+                updatedHit.entry.downloadReference ||
+                this.knownSourceDownloadReference(routedConnector, updatedHit.entry.sourceUrl),
               retrievalHint: this.joinHints(
                 updatedHit.entry.retrievalHint,
                 `Generic result rerouted to ${routedConnector}`,
@@ -249,6 +262,17 @@ export class CollectionWebRoutingService {
                 provider: updatedHit.entry.provider || detectedHost || 'web',
                 description: fetched.metadata.description || updatedHit.entry.description,
                 licenseHint: fetched.metadata.licenseHint || updatedHit.entry.licenseHint,
+                downloadUrl: fetched.metadata.downloadUrl || updatedHit.entry.downloadUrl || updatedHit.entry.sourceUrl,
+                downloadMethod:
+                  fetched.metadata.downloadUrl
+                    ? 'direct'
+                    : updatedHit.entry.downloadMethod || 'source-page',
+                downloadHint:
+                  fetched.metadata.downloadUrl
+                    ? 'Direct file URL discovered during generic HTML extraction.'
+                    : updatedHit.entry.downloadHint || 'Open the source page and inspect dataset or download links.',
+                downloadReference:
+                  fetched.metadata.downloadUrl || updatedHit.entry.downloadReference || updatedHit.entry.sourceUrl,
                 retrievalHint: this.joinHints(
                   updatedHit.entry.retrievalHint,
                   `Generic HTML extraction from ${detectedHost || 'web'}`,
@@ -328,6 +352,7 @@ export class CollectionWebRoutingService {
       licenseHint,
       directDownloadAvailable: linkCandidates.some((candidate) => this.hasDirectDownloadSuffix(candidate)),
       linkCandidates,
+      downloadUrl: linkCandidates.find((candidate) => this.hasDirectDownloadSuffix(candidate)),
     };
   }
 
@@ -456,7 +481,85 @@ export class CollectionWebRoutingService {
     if (entry.rowsHint?.trim() && entry.rowsHint !== 'Unknown') score += 1;
     if (entry.licenseHint?.trim() && entry.licenseHint !== 'See source page') score += 1;
     if (entry.providerDetail?.trim()) score += 0.5;
-    return Math.min(1, score / 6.5);
+    if (entry.downloadUrl?.trim()) score += 0.5;
+    if (entry.downloadHint?.trim()) score += 0.5;
+    return Math.min(1, score / 7.5);
+  }
+
+  private knownSourceDownloadUrl(connector: CollectionSourceId, sourceUrl?: string): string | undefined {
+    if (!sourceUrl?.trim()) {
+      return undefined;
+    }
+    return sourceUrl;
+  }
+
+  private knownSourceDownloadMethod(connector: CollectionSourceId): 'source-page' | 'api' | 'cli' {
+    switch (connector) {
+      case 'openml':
+        return 'api';
+      case 'kaggle':
+        return 'cli';
+      default:
+        return 'source-page';
+    }
+  }
+
+  private knownSourceDownloadHint(connector: CollectionSourceId, sourceUrl?: string): string | undefined {
+    const reference = this.knownSourceDownloadReference(connector, sourceUrl);
+    switch (connector) {
+      case 'huggingface':
+        return reference
+          ? `Open the Hugging Face dataset page for ${reference} and download files from the repo tree or hub API.`
+          : 'Open the Hugging Face dataset page and download files from the repo tree or hub API.';
+      case 'kaggle':
+        return reference ? `Run: kaggle datasets download -d ${reference}` : 'Run Kaggle CLI download for the dataset reference.';
+      case 'openml':
+        return reference
+          ? `Open the OpenML dataset page for ${reference} and use the API/data links.`
+          : 'Open the OpenML dataset page and use the API/data links.';
+      case 'uci':
+        return reference
+          ? `Open the UCI dataset page for ${reference} and use the data folder or download links.`
+          : 'Open the UCI dataset page and use the data folder or download links.';
+      default:
+        return undefined;
+    }
+  }
+
+  private knownSourceDownloadReference(connector: CollectionSourceId, sourceUrl?: string): string | undefined {
+    if (!sourceUrl?.trim()) {
+      return undefined;
+    }
+    try {
+      const url = new URL(sourceUrl);
+      const path = url.pathname.replace(/\/+$/, '');
+      switch (connector) {
+        case 'huggingface': {
+          const match = path.match(/\/datasets\/(.+)$/);
+          return match?.[1];
+        }
+        case 'kaggle': {
+          const match = path.match(/\/datasets\/([^/]+\/[^/]+)$/);
+          return match?.[1];
+        }
+        case 'openml': {
+          const id = url.searchParams.get('id');
+          if (id) {
+            return id;
+          }
+          const match = path.match(/\/(?:d|dataset|search)\/?(\d+)/);
+          return match?.[1];
+        }
+        case 'uci': {
+          const match = path.match(/\/dataset\/([^/]+)$/);
+          return match?.[1];
+        }
+        default:
+          return undefined;
+      }
+    } catch {
+      return undefined;
+    }
   }
 
   private joinHints(primary?: string, extra?: string): string | undefined {

@@ -150,6 +150,10 @@ function summarizeDatasetItem(item: ExternalDatasetItem) {
     retrievalHint: item.retrievalHint,
     matchedKeywords: item.matchedKeywords,
     directDownloadAvailable: item.directDownloadAvailable,
+    downloadUrl: item.downloadUrl,
+    downloadMethod: item.downloadMethod,
+    downloadHint: item.downloadHint,
+    downloadReference: item.downloadReference,
     matchedReason: item.matchedReason,
   };
 }
@@ -187,6 +191,10 @@ function summarizeRawDatasetHit(hit: CollectedDatasetHit) {
     matchedTerms: hit.matchedTerms,
     sourceUrl: hit.sourceUrl,
     retrievalHint: hit.retrievalHint,
+    downloadUrl: hit.downloadUrl,
+    downloadMethod: hit.downloadMethod,
+    downloadHint: hit.downloadHint,
+    downloadReference: hit.downloadReference,
   };
 }
 
