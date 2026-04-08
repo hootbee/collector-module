@@ -5,7 +5,8 @@ export type DatasetDiscoverySource =
   | 'huggingface'
   | 'openml'
   | 'uci'
-  | 'kaggle';
+  | 'kaggle'
+  | 'serpapi';
 export type KnowledgeDiscoverySource = 'seed-catalog' | 'serpapi' | 'crossref';
 
 export type DiscoveryPlan = {
@@ -41,6 +42,7 @@ export function planFromContext(context: DiscoveryContext): DiscoveryPlan {
       openml: [...context.generatedQueries],
       uci: [...context.generatedQueries],
       kaggle: [...context.generatedQueries],
+      serpapi: [...context.generatedQueries],
     },
     knowledgeSourceQueries: {
       'seed-catalog': [...context.generatedQueries],

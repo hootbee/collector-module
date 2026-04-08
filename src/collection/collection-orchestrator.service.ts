@@ -1,9 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import type { CollectionSourceId } from '../common/contracts';
+import {
+  genericDatasetSources,
+  genericKnowledgeSources,
+  structuredDatasetSources,
+  structuredDatasetThreshold,
+  structuredKnowledgeSources,
+  structuredKnowledgeThreshold,
+} from './collection-layer.config';
 import { CollectionConnectorRegistryService } from './connectors/connector-registry.service';
 import { CollectionLlmService } from './collection-llm.service';
 import { CollectionNormalizerService } from './collection-normalizer.service';
 import { CollectionPlannerService, type CollectionRequest } from './collection-planner.service';
+import { CollectionWebRoutingService } from './collection-web-routing.service';
 
 @Injectable()
 export class CollectionOrchestratorService {
@@ -12,6 +21,7 @@ export class CollectionOrchestratorService {
     private readonly connectorsService: CollectionConnectorRegistryService,
     private readonly normalizerService: CollectionNormalizerService,
     private readonly llmService: CollectionLlmService,
+    private readonly webRoutingService: CollectionWebRoutingService,
   ) {}
 
   async execute(request: CollectionRequest) {
@@ -31,16 +41,65 @@ export class CollectionOrchestratorService {
       ...request,
       llmPlan: llmPlanning?.plan ?? null,
     });
-    const requestedSources = request.requestedSources;
+    const requestedSources = [...new Set(request.requestedSources)];
+    const structuredKnowledgeRequested = requestedSources.filter((source) => structuredKnowledgeSources.includes(source));
+    const structuredDatasetRequested = requestedSources.filter((source) => structuredDatasetSources.includes(source));
+    const genericKnowledgeRequested = requestedSources.filter((source) => genericKnowledgeSources.includes(source));
+    const genericDatasetRequested = requestedSources.filter((source) => genericDatasetSources.includes(source));
 
-    const [knowledgeSearch, datasetSearch] = await Promise.all([
-      request.kind === 'dataset'
+    const [structuredKnowledgeSearch, structuredDatasetSearch] = await Promise.all([
+      request.kind === 'dataset' || structuredKnowledgeRequested.length === 0
         ? Promise.resolve({ hits: [], debug: [] })
-        : this.connectorsService.searchKnowledgeHitsForSources(requestedSources, plan, context),
-      request.kind === 'knowledge'
+        : this.connectorsService.searchKnowledgeHitsForSources(structuredKnowledgeRequested, plan, context),
+      request.kind === 'knowledge' || structuredDatasetRequested.length === 0
         ? Promise.resolve({ hits: [], debug: [] })
-        : this.connectorsService.searchDatasetHitsForSources(requestedSources, plan, context),
+        : this.connectorsService.searchDatasetHitsForSources(structuredDatasetRequested, plan, context),
     ]);
+    const structuredKnowledge = await this.webRoutingService.annotateStructuredKnowledgeHits(
+      structuredKnowledgeSearch.hits,
+    );
+    const structuredDataset = await this.webRoutingService.annotateStructuredDatasetHits(
+      structuredDatasetSearch.hits,
+    );
+
+    const shouldRunGenericKnowledge =
+      request.kind !== 'dataset' &&
+      genericKnowledgeRequested.length > 0 &&
+      structuredKnowledge.hits.length < structuredKnowledgeThreshold(requestedSources);
+    const shouldRunGenericDataset =
+      request.kind !== 'knowledge' &&
+      genericDatasetRequested.length > 0 &&
+      structuredDataset.hits.length < structuredDatasetThreshold(requestedSources);
+
+    const [genericKnowledgeSearch, genericDatasetSearch] = await Promise.all([
+      shouldRunGenericKnowledge
+        ? this.connectorsService.searchKnowledgeHitsForSources(genericKnowledgeRequested, plan, context)
+        : Promise.resolve({ hits: [], debug: [] }),
+      shouldRunGenericDataset
+        ? this.connectorsService.searchDatasetHitsForSources(genericDatasetRequested, plan, context)
+        : Promise.resolve({ hits: [], debug: [] }),
+    ]);
+    const genericKnowledge = await this.webRoutingService.routeGenericKnowledgeHits(
+      genericKnowledgeSearch.hits,
+    );
+    const genericDataset = await this.webRoutingService.routeGenericDatasetHits(
+      genericDatasetSearch.hits,
+    );
+
+    const knowledgeHits = [...structuredKnowledge.hits, ...genericKnowledge.hits];
+    const datasetHits = [...structuredDataset.hits, ...genericDataset.hits];
+    const routedHits = [
+      ...structuredKnowledge.routedHits,
+      ...structuredDataset.routedHits,
+      ...genericKnowledge.routedHits,
+      ...genericDataset.routedHits,
+    ];
+    const fetchedDocuments = [
+      ...structuredKnowledge.fetchedDocuments,
+      ...structuredDataset.fetchedDocuments,
+      ...genericKnowledge.fetchedDocuments,
+      ...genericDataset.fetchedDocuments,
+    ];
 
     return {
       context,
@@ -49,14 +108,21 @@ export class CollectionOrchestratorService {
       llmPlan: llmPlanning?.plan ?? null,
       connectorStatuses: this.connectorSummary(
         requestedSources,
-        [...knowledgeSearch.debug, ...datasetSearch.debug],
-        knowledgeSearch.hits.map((hit) => hit.connector as CollectionSourceId),
-        datasetSearch.hits.map((hit) => hit.connector as CollectionSourceId),
+        [
+          ...structuredKnowledgeSearch.debug,
+          ...structuredDatasetSearch.debug,
+          ...genericKnowledgeSearch.debug,
+          ...genericDatasetSearch.debug,
+        ],
+        knowledgeHits.map((hit) => hit.connector as CollectionSourceId),
+        datasetHits.map((hit) => hit.connector as CollectionSourceId),
       ),
-      rawKnowledgeHits: this.normalizerService.toRawKnowledgeHits(knowledgeSearch.hits),
-      rawDatasetHits: this.normalizerService.toRawDatasetHits(datasetSearch.hits),
-      knowledgeItems: this.normalizerService.normalizeKnowledge(knowledgeSearch.hits),
-      datasetItems: this.normalizerService.normalizeDatasets(datasetSearch.hits),
+      routedHits,
+      fetchedDocuments,
+      rawKnowledgeHits: this.normalizerService.toRawKnowledgeHits(knowledgeHits),
+      rawDatasetHits: this.normalizerService.toRawDatasetHits(datasetHits),
+      knowledgeItems: this.normalizerService.normalizeKnowledge(knowledgeHits),
+      datasetItems: this.normalizerService.normalizeDatasets(datasetHits),
     };
   }
 

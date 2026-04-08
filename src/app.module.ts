@@ -14,6 +14,7 @@ import { CollectionNormalizerService } from './collection/collection-normalizer.
 import { CollectionOrchestratorService } from './collection/collection-orchestrator.service';
 import { CollectionPlannerService } from './collection/collection-planner.service';
 import { CollectionService } from './collection/collection.service';
+import { CollectionWebRoutingService } from './collection/collection-web-routing.service';
 import { StoreService } from './store/store.service';
 
 @Module({
@@ -31,6 +32,7 @@ import { StoreService } from './store/store.service';
     CollectionPlannerService,
     CollectionLlmService,
     CollectionNormalizerService,
+    CollectionWebRoutingService,
     CollectionOrchestratorService,
     CollectionService,
   ],

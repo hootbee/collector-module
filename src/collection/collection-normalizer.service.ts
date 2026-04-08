@@ -14,8 +14,16 @@ export class CollectionNormalizerService {
       id: hit.id,
       connector: hit.connector as CollectedKnowledgeHit['connector'],
       sourceType: hit.sourceType,
+      layer: hit.layer,
       sourcePriority: hit.sourcePriority,
       sourceReliability: hit.sourceReliability,
+      sourceClassification: hit.sourceClassification,
+      sourceConfidence: hit.sourceConfidence,
+      detectedHost: hit.detectedHost,
+      routedConnector: hit.routedConnector as CollectedKnowledgeHit['routedConnector'],
+      metadataCompleteness: hit.metadataCompleteness,
+      extractionMethod: hit.extractionMethod,
+      extractionReliability: hit.extractionReliability,
       title: hit.title,
       text: hit.text,
       tags: [...hit.tags],
@@ -38,8 +46,17 @@ export class CollectionNormalizerService {
       id: hit.id,
       connector: hit.connector as CollectedDatasetHit['connector'],
       sourceType: hit.sourceType,
+      layer: hit.layer,
       sourcePriority: hit.sourcePriority,
       sourceReliability: hit.sourceReliability,
+      sourceClassification: hit.sourceClassification,
+      sourceConfidence: hit.sourceConfidence,
+      detectedHost: hit.detectedHost,
+      routedConnector: hit.routedConnector as CollectedDatasetHit['routedConnector'],
+      metadataCompleteness: hit.metadataCompleteness,
+      extractionMethod: hit.extractionMethod,
+      extractionReliability: hit.extractionReliability,
+      directDownloadAvailable: hit.directDownloadAvailable,
       title: hit.title,
       text: hit.text,
       tags: [...hit.tags],
@@ -77,7 +94,15 @@ export class CollectionNormalizerService {
           sourceUrl: hit.entry.sourceUrl,
           publisher: hit.entry.publisher,
           retrievalHint: hit.entry.retrievalHint,
-          matchedReason: `Collected from ${hit.connector} (${hit.sourceType})`,
+          matchedReason: this.matchedReason(hit),
+          layer: hit.layer,
+          sourceClassification: hit.sourceClassification,
+          sourceConfidence: hit.sourceConfidence,
+          detectedHost: hit.detectedHost,
+          routedConnector: hit.routedConnector as ExternalKnowledgeItem['routedConnector'],
+          metadataCompleteness: hit.metadataCompleteness,
+          extractionMethod: hit.extractionMethod,
+          extractionReliability: hit.extractionReliability,
         }];
       });
   }
@@ -104,20 +129,77 @@ export class CollectionNormalizerService {
           providerDetail: hit.entry.providerDetail,
           publisher: hit.entry.publisher,
           retrievalHint: hit.entry.retrievalHint,
-          matchedReason: `Collected from ${hit.connector} (${hit.sourceType})`,
+          matchedReason: this.matchedReason(hit),
+          layer: hit.layer,
+          sourceClassification: hit.sourceClassification,
+          sourceConfidence: hit.sourceConfidence,
+          detectedHost: hit.detectedHost,
+          routedConnector: hit.routedConnector as ExternalDatasetItem['routedConnector'],
+          metadataCompleteness: hit.metadataCompleteness,
+          extractionMethod: hit.extractionMethod,
+          extractionReliability: hit.extractionReliability,
+          directDownloadAvailable: hit.directDownloadAvailable,
         }];
       });
   }
 
   private sortHits<T extends KnowledgeDiscoveryHit | DatasetDiscoveryHit>(hits: T[]): T[] {
     return [...hits].sort((left, right) => {
+      const leftScore = this.sortScore(left);
+      const rightScore = this.sortScore(right);
+      if (rightScore !== leftScore) {
+        return rightScore - leftScore;
+      }
       if (right.sourcePriority !== left.sourcePriority) {
         return right.sourcePriority - left.sourcePriority;
       }
       if (right.sourceReliability !== left.sourceReliability) {
         return right.sourceReliability - left.sourceReliability;
       }
-      return left.id.localeCompare(right.id);
+      return this.canonicalTitle(left.title).localeCompare(this.canonicalTitle(right.title));
     });
+  }
+
+  private sortScore(hit: KnowledgeDiscoveryHit | DatasetDiscoveryHit): number {
+    let score = 0;
+    if (hit.layer === 'structured') {
+      score += 40;
+    }
+    if (hit.sourceClassification === 'known') {
+      score += 25;
+    } else if (hit.sourceClassification === 'unknown') {
+      score -= 12;
+    }
+    if (hit.directDownloadAvailable) {
+      score += 4;
+    }
+    score += (hit.metadataCompleteness ?? 0) * 10;
+    if (hit.extractionMethod === 'browser') {
+      score -= 4;
+    }
+    if (hit.extractionMethod === 'html') {
+      score -= 1;
+    }
+    score += hit.sourcePriority * 10;
+    score += hit.sourceReliability * 10;
+    return score;
+  }
+
+  private matchedReason(hit: KnowledgeDiscoveryHit | DatasetDiscoveryHit): string {
+    const parts = [
+      `Collected from ${hit.connector}`,
+      hit.layer ? `layer=${hit.layer}` : '',
+      hit.sourceType ? `type=${hit.sourceType}` : '',
+      hit.sourceClassification ? `classification=${hit.sourceClassification}` : '',
+      hit.routedConnector && hit.routedConnector !== hit.connector
+        ? `rerouted=${hit.routedConnector}`
+        : '',
+      hit.extractionMethod ? `extraction=${hit.extractionMethod}` : '',
+    ].filter(Boolean);
+    return parts.join(' | ');
+  }
+
+  private canonicalTitle(value: string): string {
+    return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   }
 }

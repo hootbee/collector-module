@@ -1,4 +1,9 @@
 import type {
+  CollectionExtractionMethod,
+  CollectionLayer,
+  CollectionSourceClassification,
+  CollectionSourceConfidence,
+  CollectionSourceId,
   DatasetCatalogEntry,
   KnowledgeCatalogEntry,
   ModalitySignal,
@@ -13,8 +18,17 @@ export type SearchHitBase = {
   kind: DiscoveryHitKind;
   connector: string;
   sourceType: DiscoverySourceType;
+  layer?: CollectionLayer;
   sourcePriority: number;
   sourceReliability: number;
+  sourceClassification?: CollectionSourceClassification;
+  sourceConfidence?: CollectionSourceConfidence;
+  detectedHost?: string;
+  routedConnector?: string;
+  metadataCompleteness?: number;
+  directDownloadAvailable?: boolean;
+  extractionMethod?: CollectionExtractionMethod;
+  extractionReliability?: number;
   title: string;
   text: string;
   tags: string[];
@@ -34,6 +48,21 @@ export type FetchedDocument = {
   finalUrl?: string;
   extractedText: string;
   metadata?: Record<string, unknown>;
+  extractionMethod: CollectionExtractionMethod;
+  retrievedAt: string;
+};
+
+export type RoutedHit = {
+  sourceHitId: string;
+  kind: DiscoveryHitKind;
+  connector: CollectionSourceId;
+  layer: CollectionLayer;
+  url?: string;
+  detectedHost?: string;
+  sourceClassification: CollectionSourceClassification;
+  sourceConfidence: CollectionSourceConfidence;
+  routedConnector?: CollectionSourceId;
+  rerouted: boolean;
 };
 
 export type DiscoveryHitBase = SearchHitBase;

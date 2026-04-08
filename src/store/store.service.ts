@@ -42,6 +42,8 @@ export class StoreService {
       llmPlanRaw: null,
       llmPlan: null,
       connectorStatuses: [],
+      routedHits: [],
+      fetchedDocuments: [],
       rawKnowledgeHits: [],
       rawDatasetHits: [],
       knowledgeItems: [],
@@ -83,6 +85,8 @@ export class StoreService {
   completeCollectionJob(jobId: string, payload: {
     stage?: string;
     connectorStatuses: CollectionConnectorStatus[];
+    routedHits: CollectionJobRecord['routedHits'];
+    fetchedDocuments: CollectionJobRecord['fetchedDocuments'];
     rawKnowledgeHits: CollectionJobRecord['rawKnowledgeHits'];
     rawDatasetHits: CollectionJobRecord['rawDatasetHits'];
     knowledgeItems: CollectionJobRecord['knowledgeItems'];
@@ -95,6 +99,8 @@ export class StoreService {
     job.status = 'completed';
     job.stage = payload.stage ?? 'completed';
     job.connectorStatuses = [...payload.connectorStatuses];
+    job.routedHits = [...payload.routedHits];
+    job.fetchedDocuments = [...payload.fetchedDocuments];
     job.rawKnowledgeHits = [...payload.rawKnowledgeHits];
     job.rawDatasetHits = [...payload.rawDatasetHits];
     job.knowledgeItems = [...payload.knowledgeItems];
@@ -156,6 +162,8 @@ export class StoreService {
       llmPlanRaw: job.llmPlanRaw,
       llmPlan: job.llmPlan,
       connectorStatuses: [...job.connectorStatuses],
+      routedHits: [...job.routedHits],
+      fetchedDocuments: [...job.fetchedDocuments],
       rawKnowledgeHits: [...job.rawKnowledgeHits],
       rawDatasetHits: [...job.rawDatasetHits],
       knowledgeItems: [...job.knowledgeItems],

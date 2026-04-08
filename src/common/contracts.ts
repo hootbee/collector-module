@@ -9,6 +9,10 @@ export type CollectionSourceId =
   | 'kaggle'
   | 'serpapi'
   | 'crossref';
+export type CollectionLayer = 'structured' | 'generic';
+export type CollectionSourceClassification = 'known' | 'unknown';
+export type CollectionSourceConfidence = 'high' | 'medium' | 'low';
+export type CollectionExtractionMethod = 'direct' | 'html' | 'browser';
 export type TaskSignal =
   | 'classification'
   | 'regression'
@@ -107,6 +111,14 @@ export type ExternalKnowledgeItem = {
   retrievalHint?: string;
   score?: number;
   matchedReason?: string;
+  layer?: CollectionLayer;
+  sourceClassification?: CollectionSourceClassification;
+  sourceConfidence?: CollectionSourceConfidence;
+  detectedHost?: string;
+  routedConnector?: CollectionSourceId;
+  metadataCompleteness?: number;
+  extractionMethod?: CollectionExtractionMethod;
+  extractionReliability?: number;
 };
 
 export type ExternalDatasetItem = {
@@ -124,6 +136,15 @@ export type ExternalDatasetItem = {
   retrievalHint?: string;
   score?: number;
   matchedReason?: string;
+  layer?: CollectionLayer;
+  sourceClassification?: CollectionSourceClassification;
+  sourceConfidence?: CollectionSourceConfidence;
+  detectedHost?: string;
+  routedConnector?: CollectionSourceId;
+  metadataCompleteness?: number;
+  extractionMethod?: CollectionExtractionMethod;
+  extractionReliability?: number;
+  directDownloadAvailable?: boolean;
 };
 
 export type SelectedExternalResourcesRecord = {
@@ -221,8 +242,16 @@ export type CollectedKnowledgeHit = {
   id: string;
   connector: CollectionSourceId;
   sourceType: 'primary' | 'support' | 'meta' | 'seed';
+  layer?: CollectionLayer;
   sourcePriority: number;
   sourceReliability: number;
+  sourceClassification?: CollectionSourceClassification;
+  sourceConfidence?: CollectionSourceConfidence;
+  detectedHost?: string;
+  routedConnector?: CollectionSourceId;
+  metadataCompleteness?: number;
+  extractionMethod?: CollectionExtractionMethod;
+  extractionReliability?: number;
   title: string;
   text: string;
   tags: string[];
@@ -243,8 +272,17 @@ export type CollectedDatasetHit = {
   id: string;
   connector: CollectionSourceId;
   sourceType: 'primary' | 'support' | 'meta' | 'seed';
+  layer?: CollectionLayer;
   sourcePriority: number;
   sourceReliability: number;
+  sourceClassification?: CollectionSourceClassification;
+  sourceConfidence?: CollectionSourceConfidence;
+  detectedHost?: string;
+  routedConnector?: CollectionSourceId;
+  metadataCompleteness?: number;
+  extractionMethod?: CollectionExtractionMethod;
+  extractionReliability?: number;
+  directDownloadAvailable?: boolean;
   title: string;
   text: string;
   tags: string[];
@@ -260,6 +298,29 @@ export type CollectedDatasetHit = {
   publisher?: string;
   sourceUrl?: string;
   retrievalHint?: string;
+};
+
+export type CollectionRoutedHit = {
+  sourceHitId: string;
+  kind: 'knowledge' | 'dataset';
+  connector: CollectionSourceId;
+  layer: CollectionLayer;
+  url?: string;
+  detectedHost?: string;
+  sourceClassification: CollectionSourceClassification;
+  sourceConfidence: CollectionSourceConfidence;
+  routedConnector?: CollectionSourceId;
+  rerouted: boolean;
+};
+
+export type CollectionFetchedDocument = {
+  sourceHitId: string;
+  url: string;
+  finalUrl?: string;
+  extractedText: string;
+  metadata?: Record<string, unknown>;
+  extractionMethod: CollectionExtractionMethod;
+  retrievedAt: string;
 };
 
 export type CollectionJobStatusResponse = {
@@ -294,6 +355,8 @@ export type CollectionJobResultsResponse = {
   llmPlanRaw: string | null;
   llmPlan: CollectionLlmPlan | null;
   connectorStatuses: CollectionConnectorStatus[];
+  routedHits: CollectionRoutedHit[];
+  fetchedDocuments: CollectionFetchedDocument[];
   rawKnowledgeHits: CollectedKnowledgeHit[];
   rawDatasetHits: CollectedDatasetHit[];
   knowledgeItems: ExternalKnowledgeItem[];
@@ -361,6 +424,8 @@ export type CollectionJobRecord = {
   llmPlanRaw: string | null;
   llmPlan: CollectionLlmPlan | null;
   connectorStatuses: CollectionConnectorStatus[];
+  routedHits: CollectionRoutedHit[];
+  fetchedDocuments: CollectionFetchedDocument[];
   rawKnowledgeHits: CollectedKnowledgeHit[];
   rawDatasetHits: CollectedDatasetHit[];
   knowledgeItems: ExternalKnowledgeItem[];

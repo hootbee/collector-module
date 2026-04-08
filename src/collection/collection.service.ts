@@ -124,9 +124,20 @@ export class CollectionService {
       console.info(
         `[CollectionService] connector status ${JSON.stringify(orchestration.connectorStatuses)}`,
       );
+      console.info(
+        `[CollectionService] collection provenance ${JSON.stringify({
+          jobId: input.jobId,
+          routedHitCount: orchestration.routedHits.length,
+          fetchedDocumentCount: orchestration.fetchedDocuments.length,
+          genericKnowledgeCount: orchestration.rawKnowledgeHits.filter((hit) => hit.layer === 'generic').length,
+          genericDatasetCount: orchestration.rawDatasetHits.filter((hit) => hit.layer === 'generic').length,
+        })}`,
+      );
 
       this.storeService.completeCollectionJob(input.jobId, {
         connectorStatuses: orchestration.connectorStatuses,
+        routedHits: orchestration.routedHits,
+        fetchedDocuments: orchestration.fetchedDocuments,
         rawKnowledgeHits: orchestration.rawKnowledgeHits,
         rawDatasetHits: orchestration.rawDatasetHits,
         knowledgeItems: orchestration.knowledgeItems,

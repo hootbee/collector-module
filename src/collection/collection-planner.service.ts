@@ -105,6 +105,13 @@ export class CollectionPlannerService {
         compressedQuery,
         ...(request.llmPlan?.datasetSourceQueries?.kaggle ?? []),
       ]).slice(0, 8),
+      serpapi: uniqueKeepOrder([
+        `${request.query} dataset`,
+        `${compressedQuery} dataset`,
+        `${compressedQuery} benchmark`,
+        request.query,
+        ...(request.llmPlan?.datasetSourceQueries?.serpapi ?? []),
+      ]).slice(0, 8),
     };
 
     const knowledgeSourceQueries: DiscoveryPlan['knowledgeSourceQueries'] = {
