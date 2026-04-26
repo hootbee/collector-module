@@ -11,8 +11,8 @@ import type {
   CollectionDownloadMethod,
   CollectionSourceId,
   ExternalDatasetItem,
-} from '../common/contracts';
-import { StoreService } from '../store/store.service';
+} from '../../common/contracts';
+import { StoreService } from '../../store/store.service';
 import { buildUserAgent, envNumber, fetchJson, fetchText } from './connectors/connector.utils';
 import { CollectionHtmlExtractionService } from './collection-html-extraction.service';
 

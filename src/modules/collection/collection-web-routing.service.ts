@@ -3,7 +3,7 @@ import type {
   CollectionSourceClassification,
   CollectionSourceConfidence,
   CollectionSourceId,
-} from '../common/contracts';
+} from '../../common/contracts';
 import {
   buildDatasetEntry,
   buildKnowledgeEntry,

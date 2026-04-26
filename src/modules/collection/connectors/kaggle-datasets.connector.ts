@@ -3,8 +3,8 @@ import Papa from 'papaparse';
 import { execFile as execFileCallback } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { promisify } from 'node:util';
-import { tokenize, uniqueKeepOrder } from '../../common/text';
-import type { DiscoveryContext } from '../../common/contracts';
+import { tokenize, uniqueKeepOrder } from '../../../common/text';
+import type { DiscoveryContext } from '../../../common/contracts';
 import type { DiscoveryConnector } from './connector.interface';
 import {
   buildDatasetEntry,

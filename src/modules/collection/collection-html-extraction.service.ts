@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { nowIso } from '../common/time';
-import type { CollectionExtractionMethod } from '../common/contracts';
+import { nowIso } from '../../common/time';
+import type { CollectionExtractionMethod } from '../../common/contracts';
 import { collapseWhitespace, fetchText, stripHtml } from './connectors/connector.utils';
 import type { FetchedDocument } from './types/collection-hit';
 

@@ -1,4 +1,4 @@
-import type { DiscoveryContext } from '../../common/contracts';
+import type { DiscoveryContext } from '../../../common/contracts';
 import type { DiscoveryPlan } from '../types/collection-plan';
 import type {
   DatasetDiscoveryHit,

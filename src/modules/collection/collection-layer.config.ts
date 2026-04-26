@@ -1,7 +1,7 @@
 import type {
   CollectionSourceConfidence,
   CollectionSourceId,
-} from '../common/contracts';
+} from '../../common/contracts';
 
 export const structuredDatasetSources: CollectionSourceId[] = [
   'seed-catalog',

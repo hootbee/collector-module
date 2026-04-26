@@ -11,7 +11,7 @@ import type {
   SharedPipelineTemplate,
   TaskSignal,
 } from '../common/contracts';
-import { CollectionService } from '../collection/collection.service';
+import { CollectionService } from '../modules/collection/collection.service';
 import { StoreService } from '../store/store.service';
 import { sharedPipelineTemplates } from './shared-pipeline-templates';
 

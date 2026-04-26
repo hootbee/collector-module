@@ -7,7 +7,7 @@ import type {
   ExternalDatasetItem,
   ExternalKnowledgeItem,
 } from '../common/contracts';
-import { CollectionService } from '../collection/collection.service';
+import { CollectionService } from '../modules/collection/collection.service';
 
 function envBoolean(name: string, fallback = false): boolean {
   const raw = process.env[name]?.trim().toLowerCase();

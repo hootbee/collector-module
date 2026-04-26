@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { stableHash } from '../../common/text';
-import type { DiscoveryContext } from '../../common/contracts';
+import { stableHash } from '../../../common/text';
+import type { DiscoveryContext } from '../../../common/contracts';
 import type { DiscoveryConnector } from './connector.interface';
 import {
   buildKnowledgeEntry,

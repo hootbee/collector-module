@@ -6,8 +6,8 @@ import type {
   CollectionSourceId,
   ModalitySignal,
   TaskSignal,
-} from '../common/contracts';
-import { StoreService } from '../store/store.service';
+} from '../../common/contracts';
+import { StoreService } from '../../store/store.service';
 import { CollectionOrchestratorService } from './collection-orchestrator.service';
 
 @Injectable()

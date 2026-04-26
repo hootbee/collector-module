@@ -9,7 +9,7 @@ import type {
   KnowledgeCatalogEntry,
   ModalitySignal,
   TaskSignal,
-} from '../../common/contracts';
+} from '../../../common/contracts';
 
 export type DiscoveryHitKind = 'knowledge' | 'dataset';
 export type DiscoverySourceType = 'primary' | 'support' | 'meta' | 'seed';

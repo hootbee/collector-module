@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import type { DiscoveryContext } from '../common/contracts';
-import { tokenize } from '../common/text';
+import type { DiscoveryContext } from '../../common/contracts';
+import { tokenize } from '../../common/text';
 import { envFlag, envNumber } from './connectors/connector.utils';
 import { CollectionLlmClientService } from './collection-llm-client.service';
 import { extractJsonBlock, previewLlmText } from './collection-llm.utils';

@@ -4,7 +4,7 @@ import type {
   CollectionSourceId,
   ModalitySignal,
   TaskSignal,
-} from '../common/contracts';
+} from '../../common/contracts';
 import { CollectionDownloadService } from './collection-download.service';
 import { CollectionService } from './collection.service';
 

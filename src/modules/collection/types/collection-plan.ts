@@ -1,4 +1,4 @@
-import type { DiscoveryContext, ModalitySignal, TaskSignal } from '../../common/contracts';
+import type { DiscoveryContext, ModalitySignal, TaskSignal } from '../../../common/contracts';
 
 export type DatasetDiscoverySource =
   | 'seed-catalog'

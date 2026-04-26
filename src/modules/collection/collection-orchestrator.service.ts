@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { CollectionSourceId } from '../common/contracts';
+import type { CollectionSourceId } from '../../common/contracts';
 import {
   genericDatasetSources,
   genericKnowledgeSources,

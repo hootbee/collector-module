@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { datasetCatalog, knowledgeCatalog } from '../../common/catalog';
-import type { DiscoveryContext } from '../../common/contracts';
+import { datasetCatalog, knowledgeCatalog } from '../../../common/catalog';
+import type { DiscoveryContext } from '../../../common/contracts';
 import {
   buildQueryMatchSignals,
   connectorSearchMetadata,

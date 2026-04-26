@@ -8,9 +8,9 @@ import type {
   ModalitySignal,
   TaskSignal,
   TaskType,
-} from '../common/contracts';
-import { nowIso } from '../common/time';
-import { tokenize, uniqueKeepOrder } from '../common/text';
+} from '../../common/contracts';
+import { nowIso } from '../../common/time';
+import { tokenize, uniqueKeepOrder } from '../../common/text';
 import type { DiscoveryPlan } from './types/collection-plan';
 
 export type CollectionRequest = {

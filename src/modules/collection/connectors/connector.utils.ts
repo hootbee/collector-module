@@ -4,9 +4,9 @@ import type {
   KnowledgeCatalogEntry,
   ModalitySignal,
   TaskSignal,
-} from '../../common/contracts';
-import { domainCatalog, modalityCatalog, taskCatalog } from '../../common/catalog';
-import { tokenize, uniqueKeepOrder } from '../../common/text';
+} from '../../../common/contracts';
+import { domainCatalog, modalityCatalog, taskCatalog } from '../../../common/catalog';
+import { tokenize, uniqueKeepOrder } from '../../../common/text';
 import { connectorMetadata } from './connector.config';
 
 type ModalityType = 'text' | 'table' | 'hybrid';

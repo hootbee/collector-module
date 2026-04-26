@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { uniqueKeepOrder } from '../../common/text';
-import type { DiscoveryContext } from '../../common/contracts';
+import { uniqueKeepOrder } from '../../../common/text';
+import type { DiscoveryContext } from '../../../common/contracts';
 import type { DiscoveryConnector } from './connector.interface';
 import {
   buildDatasetEntry,

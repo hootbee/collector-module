@@ -1,8 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { createApp } from '../main';
-import { buildDatasetEntry } from '../collection/connectors/connector.utils';
-import { CollectionWebRoutingService } from '../collection/collection-web-routing.service';
-import type { DatasetDiscoveryHit } from '../collection/types/collection-hit';
+import { buildDatasetEntry } from '../modules/collection/connectors/connector.utils';
+import { CollectionWebRoutingService } from '../modules/collection/collection-web-routing.service';
+import type { DatasetDiscoveryHit } from '../modules/collection/types/collection-hit';
 
 function respondHtml(res: ServerResponse, html: string) {
   res.writeHead(200, {

@@ -4,7 +4,7 @@ import type {
   CollectedKnowledgeHit,
   ExternalDatasetItem,
   ExternalKnowledgeItem,
-} from '../common/contracts';
+} from '../../common/contracts';
 import type {
   DatasetDiscoveryHit,
   KnowledgeDiscoveryHit,

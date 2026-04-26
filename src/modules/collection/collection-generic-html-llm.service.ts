@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type {
   CollectionGenericHtmlLlmPlan,
   CollectionGenericPageType,
-} from '../common/contracts';
+} from '../../common/contracts';
 import { CollectionLlmClientService } from './collection-llm-client.service';
 import { extractJsonBlock, previewLlmText } from './collection-llm.utils';
 

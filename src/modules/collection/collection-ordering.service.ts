@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import type { DiscoveryContext } from '../common/contracts';
-import { tokenize, uniqueKeepOrder } from '../common/text';
+import type { DiscoveryContext } from '../../common/contracts';
+import { tokenize, uniqueKeepOrder } from '../../common/text';
 import type { DiscoveryPlan } from './types/collection-plan';
 import type {
   DatasetDiscoveryHit,

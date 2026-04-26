@@ -1,8 +1,8 @@
 import { join, resolve } from 'node:path';
 import { createApp } from '../main';
 import type { CollectionSourceId, ExternalDatasetItem } from '../common/contracts';
-import { CollectionDownloadService } from '../collection/collection-download.service';
-import { CollectionService } from '../collection/collection.service';
+import { CollectionDownloadService } from '../modules/collection/collection-download.service';
+import { CollectionService } from '../modules/collection/collection.service';
 
 function loadSources(): CollectionSourceId[] {
   const raw = process.env.COLLECTION_DOWNLOAD_SMOKE_SOURCES?.trim();

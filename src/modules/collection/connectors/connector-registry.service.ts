@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { CollectionSourceId, DiscoveryContext } from '../../common/contracts';
+import type { CollectionSourceId, DiscoveryContext } from '../../../common/contracts';
 import { SeedCatalogConnector } from './seed-catalog.connector';
 import type { DiscoveryConnector } from './connector.interface';
 import type { DiscoveryPlan } from '../types/collection-plan';

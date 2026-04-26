@@ -4,7 +4,7 @@ import type {
   CollectionSourceId,
   ModalitySignal,
   TaskSignal,
-} from '../common/contracts';
+} from '../../common/contracts';
 import { extractJsonBlock, previewLlmText } from './collection-llm.utils';
 import { CollectionLlmClientService } from './collection-llm-client.service';
 
