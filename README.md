@@ -186,7 +186,7 @@ docker compose up --build -d
 백엔드 로그 확인:
 
 ```bash
-docker compose logs -f backend
+docker compose logs -f workbench
 ```
 
 중지:

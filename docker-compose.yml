@@ -1,3 +1,5 @@
+name: workbench
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -17,11 +19,11 @@ services:
       timeout: 5s
       retries: 12
 
-  backend:
+  workbench:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: stage-one-backend
+    container_name: backend
     depends_on:
       postgres:
         condition: service_healthy
@@ -29,6 +31,14 @@ services:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: 8787
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET}
+      AUTH_REFRESH_TOKEN_SECRET: ${AUTH_REFRESH_TOKEN_SECRET}
+      DATABASE_URL: postgres://stage_one:stage_one@postgres:5432/stage_one
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: stage_one
+      PGUSER: stage_one
+      PGPASSWORD: stage_one
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: stage_one
