@@ -22,7 +22,7 @@ async function waitForCollectionJob(collectionService: CollectionService, jobId:
   const waitMs = Number(process.env.COLLECTION_SMOKE_WAIT_MS ?? 1000);
 
   for (let attempt = 0; attempt < waitAttempts; attempt += 1) {
-    const status = collectionService.getStatus(jobId);
+    const status = await collectionService.getStatus(jobId);
     if (status.status === 'failed') {
       throw new Error(`Collection job ${jobId} failed: ${status.error ?? 'unknown error'}`);
     }

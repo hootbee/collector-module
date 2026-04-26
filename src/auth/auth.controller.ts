@@ -31,7 +31,7 @@ export class AuthController {
   }
 
   @Post('refresh')
-  refresh(
+  async refresh(
     @Req() request: MinimalRequest,
     @Res({ passthrough: true }) response: MinimalResponse,
   ) {
@@ -39,26 +39,26 @@ export class AuthController {
     if (!refreshToken) {
       throw new UnauthorizedException('Refresh cookie is missing.');
     }
-    const login = this.authService.refresh(refreshToken);
+    const login = await this.authService.refresh(refreshToken);
     this.setRefreshCookie(response, login.refreshToken, login.refreshExpiresAt);
     const { refreshToken: _refreshToken, refreshExpiresAt: _refreshExpiresAt, ...publicResponse } = login;
     return publicResponse;
   }
 
   @Post('logout')
-  logout(
+  async logout(
     @Req() request: MinimalRequest,
     @Res({ passthrough: true }) response: MinimalResponse,
   ) {
-    this.authService.logout(this.readCookie(request, refreshCookieName));
+    await this.authService.logout(this.readCookie(request, refreshCookieName));
     response.clearCookie?.(refreshCookieName, this.cookieBaseOptions());
     return { status: 'ok' };
   }
 
   @Get('me')
-  getMe(@Req() request: MinimalRequest) {
+  async getMe(@Req() request: MinimalRequest) {
     return {
-      user: this.authService.getUserFromAccessToken(this.readBearerToken(request)),
+      user: await this.authService.getUserFromAccessToken(this.readBearerToken(request)),
     };
   }
 

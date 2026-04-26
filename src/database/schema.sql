@@ -103,11 +103,14 @@ create table if not exists collection_jobs (
   knowledge_queries jsonb not null default '[]'::jsonb,
   connector_statuses jsonb not null default '[]'::jsonb,
   llm_plan jsonb,
+  record jsonb,
   error text,
   created_at timestamptz not null default now(),
   started_at timestamptz,
   completed_at timestamptz
 );
+
+alter table collection_jobs add column if not exists record jsonb;
 
 create table if not exists collection_results (
   id text primary key,
@@ -130,11 +133,20 @@ create table if not exists download_jobs (
   status text not null,
   stage text not null,
   target_root text not null,
+  requested_item_ids jsonb not null default '[]'::jsonb,
+  max_files_per_item integer not null default 1,
+  item_results jsonb not null default '[]'::jsonb,
+  record jsonb,
   error text,
   created_at timestamptz not null default now(),
   started_at timestamptz,
   completed_at timestamptz
 );
+
+alter table download_jobs add column if not exists requested_item_ids jsonb not null default '[]'::jsonb;
+alter table download_jobs add column if not exists max_files_per_item integer not null default 1;
+alter table download_jobs add column if not exists item_results jsonb not null default '[]'::jsonb;
+alter table download_jobs add column if not exists record jsonb;
 
 create table if not exists download_files (
   id text primary key,

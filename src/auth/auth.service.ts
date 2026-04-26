@@ -17,7 +17,7 @@ export class AuthService {
     accessToken?: string;
   }): Promise<AuthLoginResponse & { refreshToken: string; refreshExpiresAt: string }> {
     const profile = await this.googleOAuthService.verify(input);
-    const user = this.storeService.upsertOAuthUser({
+    const user = await this.storeService.upsertOAuthUser({
       provider: 'google',
       providerUserId: profile.providerUserId,
       email: profile.email,
@@ -27,44 +27,44 @@ export class AuthService {
     return this.issueLoginResponse(user);
   }
 
-  refresh(refreshToken: string): AuthLoginResponse & { refreshToken: string; refreshExpiresAt: string } {
+  async refresh(refreshToken: string): Promise<AuthLoginResponse & { refreshToken: string; refreshExpiresAt: string }> {
     const tokenHash = this.tokenService.hashRefreshToken(refreshToken);
-    const record = this.storeService.getRefreshTokenByHash(tokenHash);
+    const record = await this.storeService.getRefreshTokenByHash(tokenHash);
     if (!record || record.revokedAt || new Date(record.expiresAt).getTime() <= Date.now()) {
       throw new UnauthorizedException('Refresh token is invalid or expired.');
     }
-    this.storeService.revokeRefreshToken(tokenHash);
-    const user = this.storeService.getUser(record.userId);
+    await this.storeService.revokeRefreshToken(tokenHash);
+    const user = await this.storeService.getUser(record.userId);
     if (!user) {
       throw new UnauthorizedException('Refresh token user was not found.');
     }
     return this.issueLoginResponse(user);
   }
 
-  logout(refreshToken?: string): void {
+  async logout(refreshToken?: string): Promise<void> {
     if (!refreshToken) {
       return;
     }
-    this.storeService.revokeRefreshToken(this.tokenService.hashRefreshToken(refreshToken));
+    await this.storeService.revokeRefreshToken(this.tokenService.hashRefreshToken(refreshToken));
   }
 
-  getUserFromAccessToken(accessToken: string): AuthUserResponse {
+  async getUserFromAccessToken(accessToken: string): Promise<AuthUserResponse> {
     const payload = this.tokenService.verifyAccessToken(accessToken);
-    const user = this.storeService.getUser(payload.sub);
+    const user = await this.storeService.getUser(payload.sub);
     if (!user) {
       throw new UnauthorizedException('User was not found.');
     }
     return this.toUserResponse(user);
   }
 
-  private issueLoginResponse(user: UserRecord): AuthLoginResponse & { refreshToken: string; refreshExpiresAt: string } {
+  private async issueLoginResponse(user: UserRecord): Promise<AuthLoginResponse & { refreshToken: string; refreshExpiresAt: string }> {
     const access = this.tokenService.issueAccessToken({
       userId: user.id,
       email: user.email,
       role: user.role,
     });
     const refresh = this.tokenService.issueRefreshToken();
-    this.storeService.createRefreshToken({
+    await this.storeService.createRefreshToken({
       userId: user.id,
       tokenHash: refresh.tokenHash,
       expiresAt: refresh.expiresAt,

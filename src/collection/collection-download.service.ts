@@ -53,7 +53,7 @@ export class CollectionDownloadService {
     targetDir?: string;
     maxFilesPerItem?: number;
   }): Promise<CollectionDownloadJobStatusResponse> {
-    const collection = this.storeService.toCollectionJobResults(input.collectionJobId);
+    const collection = await this.storeService.toCollectionJobResults(input.collectionJobId);
     if (!collection) {
       throw new NotFoundException(`Collection job ${input.collectionJobId} was not found.`);
     }
@@ -71,7 +71,7 @@ export class CollectionDownloadService {
       Math.min(input.maxFilesPerItem ?? envNumber('COLLECTION_DOWNLOAD_MAX_FILES_PER_ITEM', 5), 25),
     );
 
-    const job = this.storeService.createCollectionDownloadJob({
+    const job = await this.storeService.createCollectionDownloadJob({
       collectionJobId: input.collectionJobId,
       requestedItemIds: requestedItems.map((item) => item.id),
       targetRoot,
@@ -82,16 +82,16 @@ export class CollectionDownloadService {
     return this.getStatus(job.id);
   }
 
-  getStatus(downloadJobId: string): CollectionDownloadJobStatusResponse {
-    const status = this.storeService.toCollectionDownloadJobStatus(downloadJobId);
+  async getStatus(downloadJobId: string): Promise<CollectionDownloadJobStatusResponse> {
+    const status = await this.storeService.toCollectionDownloadJobStatus(downloadJobId);
     if (!status) {
       throw new NotFoundException(`Collection download job ${downloadJobId} was not found.`);
     }
     return status;
   }
 
-  getResults(downloadJobId: string): CollectionDownloadJobResultsResponse {
-    const results = this.storeService.toCollectionDownloadJobResults(downloadJobId);
+  async getResults(downloadJobId: string): Promise<CollectionDownloadJobResultsResponse> {
+    const results = await this.storeService.toCollectionDownloadJobResults(downloadJobId);
     if (!results) {
       throw new NotFoundException(`Collection download job ${downloadJobId} was not found.`);
     }
@@ -104,7 +104,7 @@ export class CollectionDownloadService {
     targetRoot: string,
     maxFilesPerItem: number,
   ) {
-    this.storeService.startCollectionDownloadJob(downloadJobId);
+    await this.storeService.startCollectionDownloadJob(downloadJobId);
 
     try {
       await mkdir(targetRoot, { recursive: true });
@@ -114,10 +114,10 @@ export class CollectionDownloadService {
         itemResults.push(await this.downloadItem(item, targetRoot, maxFilesPerItem));
       }
 
-      this.storeService.completeCollectionDownloadJob(downloadJobId, { itemResults });
+      await this.storeService.completeCollectionDownloadJob(downloadJobId, { itemResults });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown collection download failure';
-      this.storeService.failCollectionDownloadJob(downloadJobId, message);
+      await this.storeService.failCollectionDownloadJob(downloadJobId, message);
     }
   }
 

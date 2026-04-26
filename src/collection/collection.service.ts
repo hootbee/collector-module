@@ -26,7 +26,7 @@ export class CollectionService {
     mustInclude?: string[];
     mustAvoid?: string[];
   }): Promise<CollectionJobStatusResponse> {
-    const job = this.storeService.createCollectionJob({
+    const job = await this.storeService.createCollectionJob({
       query: input.query,
       kind: input.kind,
       requestedSources: input.requestedSources,
@@ -48,16 +48,16 @@ export class CollectionService {
     return this.getStatus(job.id);
   }
 
-  getStatus(jobId: string): CollectionJobStatusResponse {
-    const status = this.storeService.toCollectionJobStatus(jobId);
+  async getStatus(jobId: string): Promise<CollectionJobStatusResponse> {
+    const status = await this.storeService.toCollectionJobStatus(jobId);
     if (!status) {
       throw new NotFoundException(`Collection job ${jobId} was not found.`);
     }
     return status;
   }
 
-  getResults(jobId: string): CollectionJobResultsResponse {
-    const results = this.storeService.toCollectionJobResults(jobId);
+  async getResults(jobId: string): Promise<CollectionJobResultsResponse> {
+    const results = await this.storeService.toCollectionJobResults(jobId);
     if (!results) {
       throw new NotFoundException(`Collection job ${jobId} was not found.`);
     }
@@ -85,7 +85,7 @@ export class CollectionService {
         mustAvoid: input.mustAvoid,
       });
 
-      this.storeService.startCollectionJob(input.jobId, {
+      await this.storeService.startCollectionJob(input.jobId, {
         stage: 'collecting',
         datasetQueries: orchestration.plan.datasetQueries,
         knowledgeQueries: orchestration.plan.knowledgeQueries,
@@ -134,7 +134,7 @@ export class CollectionService {
         })}`,
       );
 
-      this.storeService.completeCollectionJob(input.jobId, {
+      await this.storeService.completeCollectionJob(input.jobId, {
         connectorStatuses: orchestration.connectorStatuses,
         routedHits: orchestration.routedHits,
         fetchedDocuments: orchestration.fetchedDocuments,
@@ -145,7 +145,7 @@ export class CollectionService {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown collection failure';
-      this.storeService.failCollectionJob(input.jobId, message);
+      await this.storeService.failCollectionJob(input.jobId, message);
     }
   }
 }
