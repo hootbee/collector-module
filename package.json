@@ -10,6 +10,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "auth:smoke": "ts-node src/scripts/auth-smoke.ts",
+    "db:smoke": "ts-node src/scripts/db-smoke.ts",
     "collection:smoke": "ts-node src/scripts/collection-smoke.ts",
     "collection:browser:smoke": "ts-node src/scripts/collection-browser-fallback-smoke.ts",
     "collection:download:smoke": "ts-node src/scripts/collection-download-smoke.ts"
@@ -18,8 +19,10 @@
     "@nestjs/common": "^11.1.8",
     "@nestjs/core": "^11.1.8",
     "@nestjs/platform-express": "^11.1.8",
+    "@types/pg": "^8.20.0",
     "dotenv": "^17.3.1",
     "papaparse": "^5.5.3",
+    "pg": "^8.20.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },

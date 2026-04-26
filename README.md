@@ -5,6 +5,7 @@
 
 현재 범위:
 
+- PostgreSQL 연결 및 초기 스키마 적용 smoke
 - Google OAuth 기반 auth API
 - JWT access token + HttpOnly refresh cookie
 - collection job 생성
@@ -64,6 +65,7 @@ COLLECTION_BROWSER_FALLBACK_ENABLED=true npm run collection:browser:smoke
 ## API
 
 - `GET /api/v1/health`
+- `GET /api/v1/database/health`
 - `POST /api/v1/auth/google`
 - `POST /api/v1/auth/refresh`
 - `POST /api/v1/auth/logout`
@@ -83,7 +85,7 @@ COLLECTION_BROWSER_FALLBACK_ENABLED=true npm run collection:browser:smoke
 - access token: Bearer JWT
 - refresh token: HttpOnly cookie
 - 현재 저장소: in-memory `StoreService`
-- 추후 MySQL 전환 시 `users`, `oauth_accounts`, `refresh_tokens` 테이블로 이전
+- 추후 PostgreSQL repository 전환 시 `users`, `oauth_accounts`, `refresh_tokens` 테이블 사용
 
 환경변수:
 
@@ -135,6 +137,50 @@ Authorization: Bearer <accessToken>
 
 ```bash
 npm run auth:smoke
+```
+
+## PostgreSQL
+
+PostgreSQL 연결은 `DatabaseModule`에서 관리합니다. 현재는 연결과 초기 스키마 적용 기반을 먼저 붙였고, 기존 in-memory `StoreService`를 PostgreSQL repository로 교체하는 작업은 다음 단계입니다.
+
+환경변수:
+
+```bash
+DATABASE_URL=postgres://stage_one:stage_one@127.0.0.1:5432/stage_one
+PGHOST=127.0.0.1
+PGPORT=5432
+PGDATABASE=stage_one
+PGUSER=stage_one
+PGPASSWORD=stage_one
+DB_POOL_MAX=10
+DB_CONNECTION_TIMEOUT_MS=5000
+DB_IDLE_TIMEOUT_MS=30000
+DB_SSL=false
+DB_SSL_REJECT_UNAUTHORIZED=true
+```
+
+연결 확인:
+
+```bash
+npm run db:smoke
+```
+
+초기 스키마까지 적용:
+
+```bash
+DB_SMOKE_MIGRATE=true npm run db:smoke
+```
+
+로컬 PostgreSQL 컨테이너:
+
+```bash
+docker compose -f docker-compose.postgres.yml up -d
+```
+
+HTTP health:
+
+```http
+GET /api/v1/database/health
 ```
 
 ## Collection 요청 형식
@@ -369,6 +415,18 @@ SERPAPI_API_KEY=...
 
 ```bash
 PORT=8787
+
+DATABASE_URL=postgres://stage_one:stage_one@127.0.0.1:5432/stage_one
+PGHOST=127.0.0.1
+PGPORT=5432
+PGDATABASE=stage_one
+PGUSER=stage_one
+PGPASSWORD=stage_one
+DB_POOL_MAX=10
+DB_CONNECTION_TIMEOUT_MS=5000
+DB_IDLE_TIMEOUT_MS=30000
+DB_SSL=false
+DB_SSL_REJECT_UNAUTHORIZED=true
 
 COLLECTION_HTTP_TIMEOUT_MS=15000
 COLLECTION_HTTP_RETRY_COUNT=3

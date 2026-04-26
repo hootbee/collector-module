@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: stage-one-postgres
+    environment:
+      POSTGRES_DB: stage_one
+      POSTGRES_USER: stage_one
+      POSTGRES_PASSWORD: stage_one
+    ports:
+      - "5432:5432"
+    volumes:
+      - stage_one_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stage_one -d stage_one"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  stage_one_postgres_data:

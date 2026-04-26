@@ -1,0 +1,169 @@
+create table if not exists users (
+  id text primary key,
+  email text not null unique,
+  name text not null,
+  avatar_url text,
+  role text not null default 'user',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists oauth_accounts (
+  id text primary key,
+  user_id text not null references users(id) on delete cascade,
+  provider text not null,
+  provider_user_id text not null,
+  email text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(provider, provider_user_id)
+);
+
+create table if not exists refresh_tokens (
+  id text primary key,
+  user_id text not null references users(id) on delete cascade,
+  token_hash text not null unique,
+  expires_at timestamptz not null,
+  revoked_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists data_sources (
+  id text primary key,
+  user_id text not null references users(id) on delete cascade,
+  name text not null,
+  source text not null,
+  rows_label text,
+  linked_pipeline_id text,
+  domain_industry_context text,
+  domain_subject_scope text,
+  domain_regulation_scope text,
+  domain_stakeholder_notes text,
+  data_modality text,
+  row_unit text,
+  sensitivity_note text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists pipelines (
+  id text primary key,
+  user_id text references users(id) on delete cascade,
+  kind text not null,
+  domain_key text,
+  domain_label text,
+  title text not null,
+  description text not null default '',
+  module_ids jsonb not null default '[]'::jsonb,
+  connected_after jsonb not null default '[]'::jsonb,
+  module_layout jsonb not null default '{}'::jsonb,
+  highlight text,
+  auto_named boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists module_snapshots (
+  id text primary key,
+  user_id text not null references users(id) on delete cascade,
+  pipeline_id text references pipelines(id) on delete cascade,
+  module_id text not null,
+  summary text not null default '',
+  data jsonb,
+  saved_at timestamptz not null default now(),
+  unique(user_id, pipeline_id, module_id)
+);
+
+create table if not exists orchestrator_jobs (
+  id text primary key,
+  user_id text references users(id) on delete set null,
+  pipeline_id text references pipelines(id) on delete set null,
+  data_source_id text references data_sources(id) on delete set null,
+  module_type text not null,
+  status text not null,
+  stage text not null,
+  input jsonb not null default '{}'::jsonb,
+  result_summary jsonb,
+  error text,
+  created_at timestamptz not null default now(),
+  started_at timestamptz,
+  completed_at timestamptz
+);
+
+create table if not exists collection_jobs (
+  id text primary key,
+  orchestrator_job_id text references orchestrator_jobs(id) on delete set null,
+  user_id text references users(id) on delete set null,
+  query text not null,
+  kind text not null,
+  sources jsonb not null default '[]'::jsonb,
+  status text not null,
+  stage text not null,
+  dataset_queries jsonb not null default '[]'::jsonb,
+  knowledge_queries jsonb not null default '[]'::jsonb,
+  connector_statuses jsonb not null default '[]'::jsonb,
+  llm_plan jsonb,
+  error text,
+  created_at timestamptz not null default now(),
+  started_at timestamptz,
+  completed_at timestamptz
+);
+
+create table if not exists collection_results (
+  id text primary key,
+  collection_job_id text not null references collection_jobs(id) on delete cascade,
+  item_type text not null,
+  source text,
+  provider text,
+  title text not null,
+  source_url text,
+  download_url text,
+  metadata jsonb not null default '{}'::jsonb,
+  provenance jsonb not null default '{}'::jsonb,
+  score double precision,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists download_jobs (
+  id text primary key,
+  collection_job_id text not null references collection_jobs(id) on delete cascade,
+  status text not null,
+  stage text not null,
+  target_root text not null,
+  error text,
+  created_at timestamptz not null default now(),
+  started_at timestamptz,
+  completed_at timestamptz
+);
+
+create table if not exists download_files (
+  id text primary key,
+  download_job_id text not null references download_jobs(id) on delete cascade,
+  collection_result_id text references collection_results(id) on delete set null,
+  file_name text not null,
+  file_path text not null,
+  bytes bigint not null,
+  content_type text,
+  source_url text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists job_logs (
+  id bigserial primary key,
+  job_id text not null,
+  job_type text not null,
+  level text not null,
+  message text not null,
+  context jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_oauth_accounts_user_id on oauth_accounts(user_id);
+create index if not exists idx_refresh_tokens_user_id on refresh_tokens(user_id);
+create index if not exists idx_data_sources_user_id on data_sources(user_id);
+create index if not exists idx_pipelines_user_id on pipelines(user_id);
+create index if not exists idx_orchestrator_jobs_user_id on orchestrator_jobs(user_id);
+create index if not exists idx_collection_jobs_user_id on collection_jobs(user_id);
+create index if not exists idx_collection_results_job_id on collection_results(collection_job_id);
+create index if not exists idx_download_jobs_collection_job_id on download_jobs(collection_job_id);
+create index if not exists idx_job_logs_job on job_logs(job_type, job_id);
