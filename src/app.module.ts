@@ -24,11 +24,14 @@ import { CollectionService } from './collection/collection.service';
 import { CollectionOrderingService } from './collection/collection-ordering.service';
 import { CollectionSerpResultFilterService } from './collection/collection-serp-result-filter.service';
 import { CollectionWebRoutingService } from './collection/collection-web-routing.service';
+import { OrchestratorController } from './orchestrator/orchestrator.controller';
+import { OrchestratorModuleRegistryService } from './orchestrator/orchestrator-module-registry.service';
+import { OrchestratorService } from './orchestrator/orchestrator.service';
 import { StoreModule } from './store/store.module';
 
 @Module({
   imports: [StoreModule, DatabaseModule, AuthModule],
-  controllers: [AppController, CollectionController],
+  controllers: [AppController, CollectionController, OrchestratorController],
   providers: [
     SeedCatalogConnector,
     HuggingFaceDatasetsConnector,
@@ -51,6 +54,8 @@ import { StoreModule } from './store/store.module';
     CollectionOrchestratorService,
     CollectionDownloadService,
     CollectionService,
+    OrchestratorModuleRegistryService,
+    OrchestratorService,
   ],
 })
 export class AppModule {}

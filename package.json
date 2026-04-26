@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "auth:smoke": "ts-node src/scripts/auth-smoke.ts",
     "db:smoke": "ts-node src/scripts/db-smoke.ts",
+    "orchestrator:smoke": "ts-node src/scripts/orchestrator-smoke.ts",
     "collection:smoke": "ts-node src/scripts/collection-smoke.ts",
     "collection:browser:smoke": "ts-node src/scripts/collection-browser-fallback-smoke.ts",
     "collection:download:smoke": "ts-node src/scripts/collection-download-smoke.ts"

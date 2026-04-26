@@ -439,6 +439,57 @@ export type CollectionDownloadJobResultsResponse = {
   itemResults: CollectionDownloadItemResult[];
 };
 
+export type OrchestratorModuleType =
+  | 'collection'
+  | 'analysis-stub'
+  | 'diagnosis-stub'
+  | 'report-stub';
+
+export type OrchestratorJobRecord = {
+  id: string;
+  userId: string | null;
+  pipelineId: string | null;
+  dataSourceId: string | null;
+  moduleType: OrchestratorModuleType;
+  status: DiscoveryJobStatus;
+  stage: string;
+  input: Record<string, unknown>;
+  resultSummary: Record<string, unknown> | null;
+  error: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+};
+
+export type OrchestratorJobStatusResponse = {
+  jobId: string;
+  userId: string | null;
+  pipelineId: string | null;
+  dataSourceId: string | null;
+  moduleType: OrchestratorModuleType;
+  status: DiscoveryJobStatus;
+  stage: string;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  error: string | null;
+};
+
+export type OrchestratorJobResultsResponse = OrchestratorJobStatusResponse & {
+  input: Record<string, unknown>;
+  resultSummary: Record<string, unknown> | null;
+};
+
+export type OrchestratorJobLogRecord = {
+  id: number;
+  jobId: string;
+  jobType: string;
+  level: 'debug' | 'info' | 'warn' | 'error';
+  message: string;
+  context: Record<string, unknown>;
+  createdAt: string;
+};
+
 export type SessionRecord = {
   id: string;
   createdAt: string;

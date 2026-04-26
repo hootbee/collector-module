@@ -14,6 +14,11 @@ import type {
   CollectionLlmPlan,
   CollectionSourceId,
   OAuthAccountRecord,
+  OrchestratorJobLogRecord,
+  OrchestratorJobRecord,
+  OrchestratorJobResultsResponse,
+  OrchestratorJobStatusResponse,
+  OrchestratorModuleType,
   RefreshTokenRecord,
   UserRecord,
 } from '../common/contracts';
@@ -24,6 +29,9 @@ import { DatabaseService } from '../database/database.service';
 export class StoreService {
   private readonly collectionJobs = new Map<string, CollectionJobRecord>();
   private readonly collectionDownloadJobs = new Map<string, CollectionDownloadJobRecord>();
+  private readonly orchestratorJobs = new Map<string, OrchestratorJobRecord>();
+  private readonly orchestratorLogs = new Map<string, OrchestratorJobLogRecord[]>();
+  private memoryLogId = 1;
   private readonly users = new Map<string, UserRecord>();
   private readonly oauthAccounts = new Map<string, OAuthAccountRecord>();
   private readonly refreshTokens = new Map<string, RefreshTokenRecord>();
@@ -108,6 +116,158 @@ export class StoreService {
       ...record,
       revokedAt: nowIso(),
     });
+  }
+
+  async createOrchestratorJob(input: {
+    userId?: string | null;
+    pipelineId?: string | null;
+    dataSourceId?: string | null;
+    moduleType: OrchestratorModuleType;
+    input: Record<string, unknown>;
+  }): Promise<OrchestratorJobRecord> {
+    const job: OrchestratorJobRecord = {
+      id: `orch-${randomUUID().replace(/-/g, '').slice(0, 12)}`,
+      userId: input.userId ?? null,
+      pipelineId: input.pipelineId ?? null,
+      dataSourceId: input.dataSourceId ?? null,
+      moduleType: input.moduleType,
+      status: 'queued',
+      stage: 'waiting',
+      input: { ...input.input },
+      resultSummary: null,
+      error: null,
+      createdAt: nowIso(),
+      startedAt: null,
+      completedAt: null,
+    };
+    this.orchestratorJobs.set(job.id, job);
+    await this.persistOrchestratorJob(job);
+    await this.appendJobLog({
+      jobId: job.id,
+      jobType: 'orchestrator',
+      level: 'info',
+      message: 'orchestrator job queued',
+      context: { moduleType: job.moduleType },
+    });
+    return job;
+  }
+
+  async getOrchestratorJob(jobId: string): Promise<OrchestratorJobRecord | undefined> {
+    return this.loadOrchestratorJob(jobId);
+  }
+
+  async startOrchestratorJob(jobId: string, stage: string): Promise<void> {
+    const job = await this.loadOrchestratorJob(jobId);
+    if (!job) {
+      return;
+    }
+    const next: OrchestratorJobRecord = {
+      ...job,
+      status: 'running',
+      stage,
+      startedAt: job.startedAt ?? nowIso(),
+    };
+    this.orchestratorJobs.set(next.id, next);
+    await this.persistOrchestratorJob(next);
+  }
+
+  async completeOrchestratorJob(jobId: string, payload: {
+    stage?: string;
+    resultSummary: Record<string, unknown>;
+  }): Promise<void> {
+    const job = await this.loadOrchestratorJob(jobId);
+    if (!job) {
+      return;
+    }
+    const next: OrchestratorJobRecord = {
+      ...job,
+      status: 'completed',
+      stage: payload.stage ?? 'completed',
+      resultSummary: { ...payload.resultSummary },
+      completedAt: nowIso(),
+    };
+    this.orchestratorJobs.set(next.id, next);
+    await this.persistOrchestratorJob(next);
+  }
+
+  async failOrchestratorJob(jobId: string, error: string): Promise<void> {
+    const job = await this.loadOrchestratorJob(jobId);
+    if (!job) {
+      return;
+    }
+    const next: OrchestratorJobRecord = {
+      ...job,
+      status: 'failed',
+      stage: 'failed',
+      error,
+      completedAt: nowIso(),
+    };
+    this.orchestratorJobs.set(next.id, next);
+    await this.persistOrchestratorJob(next);
+  }
+
+  async toOrchestratorJobStatus(jobId: string): Promise<OrchestratorJobStatusResponse | undefined> {
+    const job = await this.loadOrchestratorJob(jobId);
+    if (!job) {
+      return undefined;
+    }
+    return this.toOrchestratorStatusResponse(job);
+  }
+
+  async toOrchestratorJobResults(jobId: string): Promise<OrchestratorJobResultsResponse | undefined> {
+    const job = await this.loadOrchestratorJob(jobId);
+    if (!job) {
+      return undefined;
+    }
+    return {
+      ...this.toOrchestratorStatusResponse(job),
+      input: { ...job.input },
+      resultSummary: job.resultSummary ? { ...job.resultSummary } : null,
+    };
+  }
+
+  async appendJobLog(input: {
+    jobId: string;
+    jobType: string;
+    level: OrchestratorJobLogRecord['level'];
+    message: string;
+    context?: Record<string, unknown>;
+  }): Promise<OrchestratorJobLogRecord> {
+    if (this.usePostgres()) {
+      const result = await this.databaseService.query<JobLogRow>(
+        [
+          'insert into job_logs (job_id, job_type, level, message, context)',
+          'values ($1, $2, $3, $4, $5)',
+          'returning *',
+        ].join(' '),
+        [input.jobId, input.jobType, input.level, input.message, JSON.stringify(input.context ?? {})],
+      );
+      return this.jobLogFromRow(result.rows[0]);
+    }
+
+    const record: OrchestratorJobLogRecord = {
+      id: this.memoryLogId,
+      jobId: input.jobId,
+      jobType: input.jobType,
+      level: input.level,
+      message: input.message,
+      context: { ...(input.context ?? {}) },
+      createdAt: nowIso(),
+    };
+    this.memoryLogId += 1;
+    this.orchestratorLogs.set(input.jobId, [...(this.orchestratorLogs.get(input.jobId) ?? []), record]);
+    return record;
+  }
+
+  async getJobLogs(jobId: string): Promise<OrchestratorJobLogRecord[]> {
+    if (this.usePostgres()) {
+      const result = await this.databaseService.query<JobLogRow>(
+        'select * from job_logs where job_id = $1 order by created_at asc, id asc',
+        [jobId],
+      );
+      return result.rows.map((row) => this.jobLogFromRow(row));
+    }
+    return [...(this.orchestratorLogs.get(jobId) ?? [])];
   }
 
   async createCollectionJob(input: {
@@ -520,6 +680,37 @@ export class StoreService {
     return user;
   }
 
+  private async persistOrchestratorJob(job: OrchestratorJobRecord): Promise<void> {
+    if (!this.usePostgres()) {
+      return;
+    }
+    await this.databaseService.query(
+      [
+        'insert into orchestrator_jobs (id, user_id, pipeline_id, data_source_id, module_type, status, stage, input, result_summary, error, created_at, started_at, completed_at)',
+        'values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)',
+        'on conflict (id) do update set',
+        'user_id = excluded.user_id, pipeline_id = excluded.pipeline_id, data_source_id = excluded.data_source_id,',
+        'module_type = excluded.module_type, status = excluded.status, stage = excluded.stage, input = excluded.input,',
+        'result_summary = excluded.result_summary, error = excluded.error, started_at = excluded.started_at, completed_at = excluded.completed_at',
+      ].join(' '),
+      [
+        job.id,
+        job.userId,
+        job.pipelineId,
+        job.dataSourceId,
+        job.moduleType,
+        job.status,
+        job.stage,
+        JSON.stringify(job.input),
+        JSON.stringify(job.resultSummary),
+        job.error,
+        job.createdAt,
+        job.startedAt,
+        job.completedAt,
+      ],
+    );
+  }
+
   private async persistCollectionJob(job: CollectionJobRecord): Promise<void> {
     if (!this.usePostgres()) {
       return;
@@ -584,6 +775,25 @@ export class StoreService {
         job.completedAt,
       ],
     );
+  }
+
+  private async loadOrchestratorJob(jobId: string): Promise<OrchestratorJobRecord | undefined> {
+    const cached = this.orchestratorJobs.get(jobId);
+    if (cached) {
+      return cached;
+    }
+    if (!this.usePostgres()) {
+      return undefined;
+    }
+    const result = await this.databaseService.query<OrchestratorJobRow>(
+      'select * from orchestrator_jobs where id = $1',
+      [jobId],
+    );
+    const record = result.rows[0] ? this.orchestratorJobFromRow(result.rows[0]) : undefined;
+    if (record) {
+      this.orchestratorJobs.set(record.id, record);
+    }
+    return record;
   }
 
   private async loadCollectionJob(jobId: string): Promise<CollectionJobRecord | undefined> {
@@ -660,6 +870,59 @@ export class StoreService {
     };
   }
 
+  private orchestratorJobFromRow(row: OrchestratorJobRow): OrchestratorJobRecord {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      pipelineId: row.pipeline_id,
+      dataSourceId: row.data_source_id,
+      moduleType: row.module_type,
+      status: row.status,
+      stage: row.stage,
+      input: this.objectFromJson(row.input),
+      resultSummary: row.result_summary ? this.objectFromJson(row.result_summary) : null,
+      error: row.error,
+      createdAt: this.iso(row.created_at),
+      startedAt: row.started_at ? this.iso(row.started_at) : null,
+      completedAt: row.completed_at ? this.iso(row.completed_at) : null,
+    };
+  }
+
+  private toOrchestratorStatusResponse(job: OrchestratorJobRecord): OrchestratorJobStatusResponse {
+    return {
+      jobId: job.id,
+      userId: job.userId,
+      pipelineId: job.pipelineId,
+      dataSourceId: job.dataSourceId,
+      moduleType: job.moduleType,
+      status: job.status,
+      stage: job.stage,
+      createdAt: job.createdAt,
+      startedAt: job.startedAt,
+      completedAt: job.completedAt,
+      error: job.error,
+    };
+  }
+
+  private jobLogFromRow(row: JobLogRow): OrchestratorJobLogRecord {
+    return {
+      id: Number(row.id),
+      jobId: row.job_id,
+      jobType: row.job_type,
+      level: row.level,
+      message: row.message,
+      context: this.objectFromJson(row.context),
+      createdAt: this.iso(row.created_at),
+    };
+  }
+
+  private objectFromJson(value: unknown): Record<string, unknown> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return {};
+    }
+    return value as Record<string, unknown>;
+  }
+
   private iso(value: string | Date): string {
     return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
   }
@@ -691,5 +954,31 @@ type RefreshTokenRow = {
   token_hash: string;
   expires_at: string | Date;
   revoked_at: string | Date | null;
+  created_at: string | Date;
+};
+
+type OrchestratorJobRow = {
+  id: string;
+  user_id: string | null;
+  pipeline_id: string | null;
+  data_source_id: string | null;
+  module_type: OrchestratorModuleType;
+  status: OrchestratorJobRecord['status'];
+  stage: string;
+  input: unknown;
+  result_summary: unknown | null;
+  error: string | null;
+  created_at: string | Date;
+  started_at: string | Date | null;
+  completed_at: string | Date | null;
+};
+
+type JobLogRow = {
+  id: number | string;
+  job_id: string;
+  job_type: string;
+  level: OrchestratorJobLogRecord['level'];
+  message: string;
+  context: unknown;
   created_at: string | Date;
 };
