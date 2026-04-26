@@ -58,7 +58,7 @@ export class CrossrefKnowledgeConnector implements DiscoveryConnector {
     const debug: DiscoverySearchOutcome<KnowledgeDiscoveryHit>['debug'] = [];
     const rows = Math.max(
       2,
-      Math.min(envNumber(['COLLECTION_CONNECTOR_LIMIT_PER_SOURCE', 'DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE'], 10), 8),
+      Math.min(envNumber(['COLLECTION_CONNECTOR_LIMIT_PER_SOURCE', 'DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE'], 20), 20),
     );
 
     for (const query of queries) {

@@ -352,10 +352,11 @@ function inferKnowledgeKind(
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
-  const timeoutMs = envNumber(['COLLECTION_HTTP_TIMEOUT_MS', 'DISCOVERY_HTTP_TIMEOUT_MS'], 8000);
+  const safeUrl = sanitizeUrlForLogs(url);
+  const timeoutMs = envNumber(['COLLECTION_HTTP_TIMEOUT_MS', 'DISCOVERY_HTTP_TIMEOUT_MS'], 15000);
   const retryCount = Math.max(
     0,
-    Math.min(envNumber(['COLLECTION_HTTP_RETRY_COUNT', 'DISCOVERY_HTTP_RETRY_COUNT'], 2), 3),
+    Math.min(envNumber(['COLLECTION_HTTP_RETRY_COUNT', 'DISCOVERY_HTTP_RETRY_COUNT'], 3), 5),
   );
   let lastError: unknown;
 
@@ -368,19 +369,68 @@ async function fetchWithTimeout(url: string, init: RequestInit): Promise<Respons
         signal: controller.signal,
       });
       if (response.status >= 500 && attempt < retryCount) {
-        lastError = new Error(`HTTP ${response.status} for ${url}`);
+        lastError = new Error(`HTTP ${response.status} for ${safeUrl}`);
         continue;
       }
       return response;
     } catch (error) {
       lastError = error;
       if (attempt >= retryCount) {
-        throw error;
+        throw new Error(`Fetch failed for ${safeUrl}: ${describeNetworkError(error)}`);
       }
     } finally {
       clearTimeout(timeout);
     }
   }
 
-  throw (lastError instanceof Error ? lastError : new Error(`Failed to fetch ${url}`));
+  throw new Error(`Fetch failed for ${safeUrl}: ${describeNetworkError(lastError)}`);
+}
+
+function sanitizeUrlForLogs(value: string): string {
+  try {
+    const url = new URL(value);
+    const sensitiveParams = ['api_key', 'apikey', 'key', 'token', 'access_token', 'auth', 'authorization'];
+    for (const param of sensitiveParams) {
+      if (url.searchParams.has(param)) {
+        url.searchParams.set(param, '***');
+      }
+    }
+    return url.toString();
+  } catch {
+    return value;
+  }
+}
+
+function describeNetworkError(error: unknown): string {
+  if (error == null) {
+    return 'unknown error';
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  if (error instanceof Error) {
+    const cause = error.cause as
+      | {
+          code?: string;
+          errno?: number | string;
+          syscall?: string;
+          address?: string;
+          port?: number;
+          message?: string;
+        }
+      | undefined;
+    const causeParts = [
+      cause?.code ? `code=${cause.code}` : '',
+      cause?.errno != null ? `errno=${String(cause.errno)}` : '',
+      cause?.syscall ? `syscall=${cause.syscall}` : '',
+      cause?.address ? `address=${cause.address}` : '',
+      cause?.port != null ? `port=${String(cause.port)}` : '',
+      cause?.message ? `cause=${cause.message}` : '',
+    ].filter(Boolean);
+    if (causeParts.length > 0) {
+      return `${error.name}: ${error.message} (${causeParts.join(' ')})`;
+    }
+    return `${error.name}: ${error.message}`;
+  }
+  return String(error);
 }

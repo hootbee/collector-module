@@ -12,5 +12,7 @@ __pycache__/
 
 storage/uploads/
 storage/tmp/
+storage/downloads/
+storage/download-smoke/
 
 *.tsbuildinfo

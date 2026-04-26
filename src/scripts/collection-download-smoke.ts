@@ -16,8 +16,8 @@ function loadSources(): CollectionSourceId[] {
 }
 
 async function waitForCollectionJob(collectionService: CollectionService, jobId: string) {
-  const waitAttempts = Number(process.env.COLLECTION_DOWNLOAD_SMOKE_WAIT_ATTEMPTS ?? 120);
-  const waitMs = Number(process.env.COLLECTION_DOWNLOAD_SMOKE_WAIT_MS ?? 500);
+  const waitAttempts = Number(process.env.COLLECTION_DOWNLOAD_SMOKE_WAIT_ATTEMPTS ?? 360);
+  const waitMs = Number(process.env.COLLECTION_DOWNLOAD_SMOKE_WAIT_MS ?? 1000);
 
   for (let attempt = 0; attempt < waitAttempts; attempt += 1) {
     const status = collectionService.getStatus(jobId);
@@ -34,8 +34,8 @@ async function waitForCollectionJob(collectionService: CollectionService, jobId:
 }
 
 async function waitForDownloadJob(downloadService: CollectionDownloadService, jobId: string) {
-  const waitAttempts = Number(process.env.COLLECTION_DOWNLOAD_SMOKE_WAIT_ATTEMPTS ?? 120);
-  const waitMs = Number(process.env.COLLECTION_DOWNLOAD_SMOKE_WAIT_MS ?? 500);
+  const waitAttempts = Number(process.env.COLLECTION_DOWNLOAD_SMOKE_WAIT_ATTEMPTS ?? 360);
+  const waitMs = Number(process.env.COLLECTION_DOWNLOAD_SMOKE_WAIT_MS ?? 1000);
 
   for (let attempt = 0; attempt < waitAttempts; attempt += 1) {
     const status = downloadService.getStatus(jobId);

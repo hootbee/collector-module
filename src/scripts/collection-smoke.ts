@@ -18,8 +18,8 @@ function envBoolean(name: string, fallback = false): boolean {
 }
 
 async function waitForCollectionJob(collectionService: CollectionService, jobId: string) {
-  const waitAttempts = Number(process.env.COLLECTION_SMOKE_WAIT_ATTEMPTS ?? 80);
-  const waitMs = Number(process.env.COLLECTION_SMOKE_WAIT_MS ?? 500);
+  const waitAttempts = Number(process.env.COLLECTION_SMOKE_WAIT_ATTEMPTS ?? 240);
+  const waitMs = Number(process.env.COLLECTION_SMOKE_WAIT_MS ?? 1000);
 
   for (let attempt = 0; attempt < waitAttempts; attempt += 1) {
     const status = collectionService.getStatus(jobId);
@@ -63,6 +63,10 @@ function loadSampleLimit(): number {
   return Number.isFinite(raw) && raw > 0 ? Math.min(raw, 30) : 10;
 }
 
+function loadTerminalOverviewEnabled(): boolean {
+  return envBoolean('COLLECTION_SMOKE_TERMINAL_OVERVIEW', true);
+}
+
 function buildRunSettings(input: {
   query: string;
   kind: 'dataset' | 'knowledge' | 'both';
@@ -77,8 +81,8 @@ function buildRunSettings(input: {
     detailMode: input.detailMode,
     sampleLimit: input.sampleLimit,
     waitPolicy: {
-      waitAttempts: Number(process.env.COLLECTION_SMOKE_WAIT_ATTEMPTS ?? 80),
-      waitMs: Number(process.env.COLLECTION_SMOKE_WAIT_MS ?? 500),
+      waitAttempts: Number(process.env.COLLECTION_SMOKE_WAIT_ATTEMPTS ?? 240),
+      waitMs: Number(process.env.COLLECTION_SMOKE_WAIT_MS ?? 1000),
     },
     llmPlanner: {
       enabled: envBoolean('COLLECTION_LLM_PLANNER_ENABLED', false),
@@ -128,6 +132,19 @@ function buildRunSettings(input: {
           process.env.OPENAI_TIMEOUT_MS ??
           15000,
       ),
+    },
+    serpResultFilter: {
+      enabled: envBoolean('COLLECTION_SERP_FILTER_LLM_ENABLED', false),
+      strictFailure: envBoolean('COLLECTION_SERP_FILTER_LLM_STRICT', false),
+      highRecallMode: envBoolean('COLLECTION_SERP_FILTER_HIGH_RECALL', true),
+      batchLimit: Number(process.env.COLLECTION_SERP_FILTER_LLM_BATCH_LIMIT ?? 8),
+    },
+    browserFallback: {
+      enabled: envBoolean('COLLECTION_BROWSER_FALLBACK_ENABLED', false),
+      strictFailure: envBoolean('COLLECTION_BROWSER_FALLBACK_STRICT', false),
+      engine: process.env.COLLECTION_BROWSER_FALLBACK_ENGINE?.trim() || 'auto',
+      timeoutMs: Number(process.env.COLLECTION_BROWSER_FALLBACK_TIMEOUT_MS ?? 15000),
+      waitAfterLoadMs: Number(process.env.COLLECTION_BROWSER_FALLBACK_WAIT_AFTER_LOAD_MS ?? 600),
     },
     connectorFlags: {
       'seed-catalog': envBoolean('COLLECTION_ENABLE_SEED_CONNECTOR', envBoolean('DISCOVERY_ENABLE_SEED_CONNECTOR', true)),
@@ -281,6 +298,56 @@ function buildDetailed(
   };
 }
 
+function printTerminalOverview(payload: unknown) {
+  const data = payload as {
+    query?: string;
+    kind?: string;
+    requestedSources?: string[];
+    detailMode?: string;
+    runSettings?: { detailMode?: string };
+    jobId?: string;
+    datasetCount?: number;
+    knowledgeCount?: number;
+    rawDatasetCount?: number;
+    rawKnowledgeCount?: number;
+    fetchedDocumentCount?: number;
+    connectorStatuses?: Array<{
+      connector: string;
+      status: 'ok' | 'error';
+      count: number;
+      errors?: string[];
+    }>;
+    datasetItems?: Array<{ id: string; provider?: string; name?: string; layer?: string; sourceClassification?: string }>;
+    knowledgeItems?: Array<{ id: string; source?: string; title?: string; layer?: string; sourceClassification?: string }>;
+  };
+
+  const requested = (data.requestedSources ?? []).join(', ') || '(none)';
+  const detailMode = data.runSettings?.detailMode ?? data.detailMode ?? '';
+  console.log(`[COLLECTION_SMOKE] query="${data.query ?? ''}" kind=${data.kind ?? ''} sources=[${requested}] detail=${detailMode}`);
+  console.log(
+    `[COLLECTION_SMOKE] job=${data.jobId ?? ''} dataset=${data.datasetCount ?? 0} knowledge=${data.knowledgeCount ?? 0} rawDataset=${data.rawDatasetCount ?? 0} rawKnowledge=${data.rawKnowledgeCount ?? 0} fetchedDocuments=${data.fetchedDocumentCount ?? 0}`,
+  );
+
+  for (const status of data.connectorStatuses ?? []) {
+    const errors = (status.errors ?? []).filter(Boolean);
+    const suffix = errors.length > 0 ? ` errors=${errors.join(' | ')}` : '';
+    console.log(
+      `[COLLECTION_SMOKE][connector] ${status.connector} status=${status.status} count=${status.count}${suffix}`,
+    );
+  }
+
+  for (const item of (data.datasetItems ?? []).slice(0, 5)) {
+    console.log(
+      `[COLLECTION_SMOKE][dataset] id=${item.id} provider=${item.provider ?? ''} layer=${item.layer ?? ''} classification=${item.sourceClassification ?? ''} name=${item.name ?? ''}`,
+    );
+  }
+  for (const item of (data.knowledgeItems ?? []).slice(0, 5)) {
+    console.log(
+      `[COLLECTION_SMOKE][knowledge] id=${item.id} source=${item.source ?? ''} layer=${item.layer ?? ''} classification=${item.sourceClassification ?? ''} title=${item.title ?? ''}`,
+    );
+  }
+}
+
 async function main() {
   const app = await createApp();
   await app.init();
@@ -293,6 +360,7 @@ async function main() {
     const sources = loadSources();
     const detailMode = loadDetailMode();
     const sampleLimit = loadSampleLimit();
+    const terminalOverviewEnabled = loadTerminalOverviewEnabled();
     const runSettings = buildRunSettings({
       query,
       kind,
@@ -323,6 +391,10 @@ async function main() {
         : detailMode === 'detailed'
           ? buildDetailed(results, sampleLimit, runSettings)
           : buildSummary(results, sampleLimit, runSettings);
+
+    if (terminalOverviewEnabled) {
+      printTerminalOverview(payload);
+    }
     console.log(JSON.stringify(payload, null, 2));
   } finally {
     await app.close();

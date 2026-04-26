@@ -11,7 +11,9 @@ import {
 import { CollectionConnectorRegistryService } from './connectors/connector-registry.service';
 import { CollectionLlmService } from './collection-llm.service';
 import { CollectionNormalizerService } from './collection-normalizer.service';
+import { CollectionOrderingService } from './collection-ordering.service';
 import { CollectionPlannerService, type CollectionRequest } from './collection-planner.service';
+import { CollectionSerpResultFilterService } from './collection-serp-result-filter.service';
 import { CollectionWebRoutingService } from './collection-web-routing.service';
 
 @Injectable()
@@ -20,6 +22,8 @@ export class CollectionOrchestratorService {
     private readonly plannerService: CollectionPlannerService,
     private readonly connectorsService: CollectionConnectorRegistryService,
     private readonly normalizerService: CollectionNormalizerService,
+    private readonly orderingService: CollectionOrderingService,
+    private readonly serpResultFilterService: CollectionSerpResultFilterService,
     private readonly llmService: CollectionLlmService,
     private readonly webRoutingService: CollectionWebRoutingService,
   ) {}
@@ -79,15 +83,39 @@ export class CollectionOrchestratorService {
         ? this.connectorsService.searchDatasetHitsForSources(genericDatasetRequested, plan, context)
         : Promise.resolve({ hits: [], debug: [] }),
     ]);
+
+    const [filteredGenericKnowledgeHits, filteredGenericDatasetHits] = await Promise.all([
+      this.serpResultFilterService.filterKnowledgeHits(
+        genericKnowledgeSearch.hits,
+        plan,
+        context,
+      ),
+      this.serpResultFilterService.filterDatasetHits(
+        genericDatasetSearch.hits,
+        plan,
+        context,
+      ),
+    ]);
+
     const genericKnowledge = await this.webRoutingService.routeGenericKnowledgeHits(
-      genericKnowledgeSearch.hits,
+      filteredGenericKnowledgeHits,
     );
     const genericDataset = await this.webRoutingService.routeGenericDatasetHits(
-      genericDatasetSearch.hits,
+      filteredGenericDatasetHits,
     );
 
-    const knowledgeHits = [...structuredKnowledge.hits, ...genericKnowledge.hits];
-    const datasetHits = [...structuredDataset.hits, ...genericDataset.hits];
+    const rankedKnowledge = this.orderingService.orderKnowledgeHits(
+      [...structuredKnowledge.hits, ...genericKnowledge.hits],
+      plan,
+      context,
+    );
+    const rankedDataset = this.orderingService.orderDatasetHits(
+      [...structuredDataset.hits, ...genericDataset.hits],
+      plan,
+      context,
+    );
+    const orderedKnowledgeHits = rankedKnowledge.items.map((item) => item.hit);
+    const orderedDatasetHits = rankedDataset.items.map((item) => item.hit);
     const routedHits = [
       ...structuredKnowledge.routedHits,
       ...structuredDataset.routedHits,
@@ -114,15 +142,19 @@ export class CollectionOrchestratorService {
           ...genericKnowledgeSearch.debug,
           ...genericDatasetSearch.debug,
         ],
-        knowledgeHits.map((hit) => hit.connector as CollectionSourceId),
-        datasetHits.map((hit) => hit.connector as CollectionSourceId),
+        orderedKnowledgeHits.map((hit) => hit.connector as CollectionSourceId),
+        orderedDatasetHits.map((hit) => hit.connector as CollectionSourceId),
       ),
       routedHits,
       fetchedDocuments,
-      rawKnowledgeHits: this.normalizerService.toRawKnowledgeHits(knowledgeHits),
-      rawDatasetHits: this.normalizerService.toRawDatasetHits(datasetHits),
-      knowledgeItems: this.normalizerService.normalizeKnowledge(knowledgeHits),
-      datasetItems: this.normalizerService.normalizeDatasets(datasetHits),
+      rawKnowledgeHits: this.normalizerService.toRawKnowledgeHits(orderedKnowledgeHits),
+      rawDatasetHits: this.normalizerService.toRawDatasetHits(orderedDatasetHits),
+      knowledgeItems: this.normalizerService.normalizeKnowledgeFromRanked(
+        rankedKnowledge.items,
+      ),
+      datasetItems: this.normalizerService.normalizeDatasetsFromRanked(
+        rankedDataset.items,
+      ),
     };
   }
 

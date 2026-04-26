@@ -147,7 +147,7 @@ export class KaggleDatasetsConnector implements DiscoveryConnector {
     const cliPath = process.env.KAGGLE_CLI_PATH?.trim() || 'kaggle';
     const limit = Math.max(
       2,
-      Math.min(envNumber(['COLLECTION_CONNECTOR_LIMIT_PER_SOURCE', 'DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE'], 10), 10),
+      Math.min(envNumber(['COLLECTION_CONNECTOR_LIMIT_PER_SOURCE', 'DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE'], 20), 20),
     );
     const env = {
       ...process.env,

@@ -11,6 +11,7 @@ import { SerpApiKnowledgeConnector } from './collection/connectors/serpapi-knowl
 import { UciDatasetsConnector } from './collection/connectors/uci-datasets.connector';
 import { CollectionGenericHtmlLlmService } from './collection/collection-generic-html-llm.service';
 import { CollectionHtmlExtractionService } from './collection/collection-html-extraction.service';
+import { CollectionBrowserFallbackService } from './collection/collection-browser-fallback.service';
 import { CollectionLlmClientService } from './collection/collection-llm-client.service';
 import { CollectionLlmService } from './collection/collection-llm.service';
 import { CollectionNormalizerService } from './collection/collection-normalizer.service';
@@ -18,6 +19,8 @@ import { CollectionOrchestratorService } from './collection/collection-orchestra
 import { CollectionPlannerService } from './collection/collection-planner.service';
 import { CollectionDownloadService } from './collection/collection-download.service';
 import { CollectionService } from './collection/collection.service';
+import { CollectionOrderingService } from './collection/collection-ordering.service';
+import { CollectionSerpResultFilterService } from './collection/collection-serp-result-filter.service';
 import { CollectionWebRoutingService } from './collection/collection-web-routing.service';
 import { StoreService } from './store/store.service';
 
@@ -38,6 +41,9 @@ import { StoreService } from './store/store.service';
     CollectionLlmService,
     CollectionGenericHtmlLlmService,
     CollectionHtmlExtractionService,
+    CollectionBrowserFallbackService,
+    CollectionSerpResultFilterService,
+    CollectionOrderingService,
     CollectionNormalizerService,
     CollectionWebRoutingService,
     CollectionOrchestratorService,

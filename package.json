@@ -10,6 +10,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "collection:smoke": "ts-node src/scripts/collection-smoke.ts",
+    "collection:browser:smoke": "ts-node src/scripts/collection-browser-fallback-smoke.ts",
     "collection:download:smoke": "ts-node src/scripts/collection-download-smoke.ts"
   },
   "dependencies": {

@@ -53,6 +53,12 @@ watch 모드:
 npm run start:watch
 ```
 
+브라우저 fallback 단독 smoke:
+
+```bash
+COLLECTION_BROWSER_FALLBACK_ENABLED=true npm run collection:browser:smoke
+```
+
 ## API
 
 - `GET /api/v1/health`
@@ -166,9 +172,11 @@ curl -X POST http://127.0.0.1:8787/api/v1/collection/jobs/<collectionJobId>/down
 
 2. generic web fallback
 - SerpAPI 기반 검색
+- Serp raw 결과 1차 triage filter(명백한 노이즈 제거)
 - known host면 전용 source로 재분류
 - unknown host면 generic HTML extraction
 - 필요하면 unknown HTML page에 대해서만 collection 전용 LLM planner로 다운로드 링크 후보를 재판단
+- HTML fetch 결과가 비어 있거나 메타 신호가 매우 약하면 browser fallback(Playwright/Puppeteer)로 한 번 더 추출
 
 원칙:
 
@@ -176,6 +184,7 @@ curl -X POST http://127.0.0.1:8787/api/v1/collection/jobs/<collectionJobId>/down
 - 결과가 부족할 때만 generic layer 사용
 - generic 결과는 provenance와 source classification을 함께 저장
 - unknown source HTML LLM은 보조 계층이며, structured source를 대체하지 않음
+- ordering은 강한 제거보다 soft 우선순위 부여 + obvious duplicate 제거에 초점
 
 ## Source별 준비 사항
 
@@ -293,15 +302,15 @@ SERPAPI_API_KEY=...
 ```bash
 PORT=8787
 
-COLLECTION_HTTP_TIMEOUT_MS=8000
-COLLECTION_HTTP_RETRY_COUNT=2
-COLLECTION_CONNECTOR_LIMIT_PER_SOURCE=10
-COLLECTION_GENERIC_FETCH_LIMIT=6
+COLLECTION_HTTP_TIMEOUT_MS=15000
+COLLECTION_HTTP_RETRY_COUNT=3
+COLLECTION_CONNECTOR_LIMIT_PER_SOURCE=20
+COLLECTION_GENERIC_FETCH_LIMIT=12
 COLLECTION_FETCHER_USER_AGENT=stage-one-backend/0.1
 COLLECTION_DOWNLOAD_STORAGE_ROOT=storage/downloads
-COLLECTION_DOWNLOAD_MAX_FILES_PER_ITEM=3
-COLLECTION_DOWNLOAD_MAX_BYTES=67108864
-COLLECTION_DOWNLOAD_TIMEOUT_MS=60000
+COLLECTION_DOWNLOAD_MAX_FILES_PER_ITEM=5
+COLLECTION_DOWNLOAD_MAX_BYTES=1610612736
+COLLECTION_DOWNLOAD_TIMEOUT_MS=300000
 
 COLLECTION_ENABLE_SEED_CONNECTOR=true
 COLLECTION_ENABLE_HF_CONNECTOR=false
@@ -313,6 +322,19 @@ COLLECTION_ENABLE_OPENML_CONNECTOR=false
 COLLECTION_LLM_PLANNER_ENABLED=false
 COLLECTION_GENERIC_HTML_LLM_ENABLED=false
 COLLECTION_GENERIC_HTML_LLM_STRICT=false
+COLLECTION_SERP_FILTER_LLM_ENABLED=false
+COLLECTION_SERP_FILTER_LLM_STRICT=false
+COLLECTION_SERP_FILTER_HIGH_RECALL=true
+COLLECTION_SERP_FILTER_LLM_BATCH_LIMIT=8
+COLLECTION_BROWSER_FALLBACK_ENABLED=false
+COLLECTION_BROWSER_FALLBACK_STRICT=false
+COLLECTION_BROWSER_FALLBACK_ENGINE=auto
+COLLECTION_BROWSER_FALLBACK_TIMEOUT_MS=15000
+COLLECTION_BROWSER_FALLBACK_WAIT_AFTER_LOAD_MS=600
+COLLECTION_SMOKE_WAIT_ATTEMPTS=240
+COLLECTION_SMOKE_WAIT_MS=1000
+COLLECTION_DOWNLOAD_SMOKE_WAIT_ATTEMPTS=360
+COLLECTION_DOWNLOAD_SMOKE_WAIT_MS=1000
 ```
 
 ## Collection LLM Planner
@@ -353,8 +375,56 @@ COLLECTION_GENERIC_HTML_LLM_STRICT=false
 - unknown generic HTML page에만 적용
 - 페이지 안에 실제로 있는 `linkCandidates`만 선택 가능
 - URL을 상상해서 만들지 않음
+
+## Browser Fallback (선택)
+
+unknown source HTML에서 일반 fetch만으로 추출 신호가 부족할 때, 최후 수단으로 headless browser를 사용할 수 있습니다.
+
+설치(둘 중 하나):
+
+```bash
+npm install playwright
+# 또는
+npm install puppeteer
+```
+
+환경변수:
+
+```bash
+COLLECTION_BROWSER_FALLBACK_ENABLED=true
+COLLECTION_BROWSER_FALLBACK_STRICT=false
+COLLECTION_BROWSER_FALLBACK_ENGINE=auto
+COLLECTION_BROWSER_FALLBACK_TIMEOUT_MS=15000
+COLLECTION_BROWSER_FALLBACK_WAIT_AFTER_LOAD_MS=600
+```
+
+원칙:
+
+- 기본 경로는 direct/html extraction
+- browser는 마지막 fallback으로만 사용
+- 브라우저 엔진 미설치/실패 시 soft-fail(기본)로 전체 수집은 계속 진행
 - 실패 시 기본값은 soft-fail이며 rule-based HTML extraction으로 계속 진행
 - `COLLECTION_GENERIC_HTML_LLM_STRICT=true`면 이 planner 실패도 예외로 올림
+
+## Serp Result Triage Filter
+
+SerpAPI 검색 결과에 대해 host routing 전에 1차 후보 정리를 할 수 있습니다.
+
+예시:
+
+```bash
+COLLECTION_SERP_FILTER_LLM_ENABLED=true
+COLLECTION_SERP_FILTER_LLM_STRICT=false
+COLLECTION_SERP_FILTER_HIGH_RECALL=true
+COLLECTION_SERP_FILTER_LLM_BATCH_LIMIT=8
+```
+
+동작 원칙:
+
+- 명백한 로그인/광고/정책/무관 링크만 보수적으로 제거
+- recall을 해치지 않도록 공격적 drop은 지양
+- 실패 시 기본은 soft-fail
+- strict 모드면 실패를 예외로 처리
 
 ## Smoke 테스트
 

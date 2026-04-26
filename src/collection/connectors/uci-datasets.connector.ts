@@ -51,10 +51,10 @@ export class UciDatasetsConnector implements DiscoveryConnector {
     const debug: DiscoverySearchOutcome<DatasetDiscoveryHit>['debug'] = [];
     const perQueryLimit = Math.max(
       2,
-      Math.min(envNumber(['COLLECTION_CONNECTOR_LIMIT_PER_SOURCE', 'DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE'], 10), 6),
+      Math.min(envNumber(['COLLECTION_CONNECTOR_LIMIT_PER_SOURCE', 'DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE'], 20), 12),
     );
-    const totalHitLimit = Math.max(3, Math.min(perQueryLimit, 4));
-    const enrichAttemptLimit = Math.max(4, perQueryLimit * 2);
+    const totalHitLimit = Math.max(4, Math.min(perQueryLimit * 2, 12));
+    const enrichAttemptLimit = Math.max(6, perQueryLimit * 3);
     const seenIds = new Set<string>();
 
     for (const baseQuery of queries) {

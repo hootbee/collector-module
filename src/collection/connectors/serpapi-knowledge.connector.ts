@@ -60,7 +60,7 @@ export class SerpApiKnowledgeConnector implements DiscoveryConnector {
     const debug: DiscoverySearchOutcome<DatasetDiscoveryHit>['debug'] = [];
     const limit = Math.max(
       2,
-      Math.min(envNumber(['COLLECTION_CONNECTOR_LIMIT_PER_SOURCE', 'DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE'], 10), 8),
+      Math.min(envNumber(['COLLECTION_CONNECTOR_LIMIT_PER_SOURCE', 'DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE'], 20), 24),
     );
     const sourceQueries = datasetQueriesForSource(plan, 'serpapi');
 
@@ -184,7 +184,7 @@ export class SerpApiKnowledgeConnector implements DiscoveryConnector {
     const debug: DiscoverySearchOutcome<KnowledgeDiscoveryHit>['debug'] = [];
     const limit = Math.max(
       2,
-      Math.min(envNumber(['COLLECTION_CONNECTOR_LIMIT_PER_SOURCE', 'DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE'], 10), 8),
+      Math.min(envNumber(['COLLECTION_CONNECTOR_LIMIT_PER_SOURCE', 'DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE'], 20), 24),
     );
 
     const sourceQueries = knowledgeQueriesForSource(plan, 'serpapi');
@@ -300,11 +300,18 @@ export class SerpApiKnowledgeConnector implements DiscoveryConnector {
       link.includes('huggingface.co/datasets/') ||
       link.includes('kaggle.com/datasets/') ||
       link.includes('openml.org') ||
-      link.includes('archive.ics.uci.edu')
+      link.includes('archive.ics.uci.edu') ||
+      link.includes('data.gov') ||
+      link.includes('github.com') ||
+      link.includes('raw.githubusercontent.com') ||
+      link.includes('zenodo.org') ||
+      link.includes('figshare.com')
     ) {
       return true;
     }
-    return /dataset|datasets|benchmark|corpus|repository|archive|download/.test(`${title} ${snippet}`);
+    return /dataset|datasets|benchmark|corpus|repository|archive|download|training data|tabular|csv|parquet|jsonl|open data|public data/.test(
+      `${title} ${snippet}`,
+    );
   }
 
   private providerFromUrl(url: string, fallback: string): string {

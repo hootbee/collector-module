@@ -76,7 +76,7 @@ export class CollectionLlmClientService {
         ? await this.callResponsesApi(input, controller.signal)
         : await this.callChatCompletions(input, controller.signal);
     } catch (error) {
-      const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      const message = this.describeRequestError(error);
       throw new Error(`Collection LLM request failed: ${message}`);
     } finally {
       clearTimeout(timeout);
@@ -218,5 +218,39 @@ export class CollectionLlmClientService {
   private chatCompletionsUrl(): string {
     const base = this.baseUrl.endsWith('/v1') ? this.baseUrl : `${this.baseUrl}/v1`;
     return `${base}/chat/completions`;
+  }
+
+  private describeRequestError(error: unknown): string {
+    if (error == null) {
+      return 'unknown error';
+    }
+    if (typeof error === 'string') {
+      return error;
+    }
+    if (error instanceof Error) {
+      const cause = error.cause as
+        | {
+            code?: string;
+            errno?: number | string;
+            syscall?: string;
+            address?: string;
+            port?: number;
+            message?: string;
+          }
+        | undefined;
+      const causeParts = [
+        cause?.code ? `code=${cause.code}` : '',
+        cause?.errno != null ? `errno=${String(cause.errno)}` : '',
+        cause?.syscall ? `syscall=${cause.syscall}` : '',
+        cause?.address ? `address=${cause.address}` : '',
+        cause?.port != null ? `port=${String(cause.port)}` : '',
+        cause?.message ? `cause=${cause.message}` : '',
+      ].filter(Boolean);
+      if (causeParts.length > 0) {
+        return `${error.name}: ${error.message} (${causeParts.join(' ')})`;
+      }
+      return `${error.name}: ${error.message}`;
+    }
+    return String(error);
   }
 }

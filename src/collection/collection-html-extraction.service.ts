@@ -73,6 +73,7 @@ export class CollectionHtmlExtractionService {
     return this.unique(
       matches
         .map((match) => this.resolveHref(match[1]?.trim() ?? '', base))
+        .map((candidate) => this.normalizeDownloadCandidate(candidate))
         .filter(Boolean)
         .filter((candidate) => this.isUsefulDownloadCandidate(candidate))
         .sort((left, right) => this.downloadCandidateScore(right) - this.downloadCandidateScore(left)),
@@ -94,7 +95,10 @@ export class CollectionHtmlExtractionService {
     if (!url) {
       return false;
     }
-    return /\.(csv|tsv|json|jsonl|zip|gz|parquet|arff|xlsx?|txt)($|\?)/i.test(url);
+    if (/\.(csv|tsv|json|jsonl|zip|gz|parquet|arff|xlsx?|txt|geojson)($|\?)/i.test(url)) {
+      return true;
+    }
+    return /\/(csv|tsv|json|jsonl|zip|gz|parquet|arff|xlsx?|txt|geojson)($|\?)/i.test(url);
   }
 
   private extractMetaContent(html: string, attribute: 'name' | 'property', value: string): string | undefined {
@@ -152,6 +156,43 @@ export class CollectionHtmlExtractionService {
     }
   }
 
+  private normalizeDownloadCandidate(url: string): string {
+    if (!url) {
+      return url;
+    }
+    const githubRaw = this.githubBlobToRaw(url);
+    if (githubRaw) {
+      return githubRaw;
+    }
+    return url;
+  }
+
+  private githubBlobToRaw(url: string): string | null {
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
+      if (host !== 'github.com') {
+        return null;
+      }
+      const parts = parsed.pathname.split('/').filter(Boolean);
+      if (parts.length < 5 || parts[2] !== 'blob') {
+        return null;
+      }
+      const owner = parts[0];
+      const repo = parts[1];
+      const branch = parts[3];
+      const path = parts.slice(4).join('/');
+      if (!owner || !repo || !branch || !path) {
+        return null;
+      }
+      const raw = new URL(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`);
+      parsed.searchParams.forEach((value, key) => raw.searchParams.set(key, value));
+      return raw.toString();
+    } catch {
+      return null;
+    }
+  }
+
   private isUsefulDownloadCandidate(url: string): boolean {
     const value = url.toLowerCase();
     if (!value) {
@@ -182,19 +223,21 @@ export class CollectionHtmlExtractionService {
   private downloadCandidateScore(url: string): number {
     const value = url.toLowerCase();
     let score = 0;
+    if (value.includes('/api/download/')) score += 26;
     if (value.includes('/static/public/')) score += 20;
     if (value.includes('/download/')) score += 18;
     if (value.includes('download=')) score += 16;
     if (value.includes('/raw/')) score += 14;
     if (value.includes('/resolve/')) score += 13;
-    if (value.endsWith('.zip') || value.includes('.zip?')) score += 12;
-    if (value.endsWith('.parquet') || value.includes('.parquet?')) score += 11;
-    if (value.endsWith('.csv') || value.includes('.csv?')) score += 10;
-    if (value.endsWith('.arff') || value.includes('.arff?')) score += 9;
-    if (value.endsWith('.tsv') || value.includes('.tsv?')) score += 8;
-    if (value.endsWith('.jsonl') || value.includes('.jsonl?')) score += 7;
-    if (value.endsWith('.txt') || value.includes('.txt?')) score += 6;
-    if (value.endsWith('.json') || value.includes('.json?')) score += 2;
+    if (value.endsWith('.csv') || value.includes('.csv?') || value.endsWith('/csv') || value.includes('/csv?')) score += 16;
+    if (value.endsWith('.parquet') || value.includes('.parquet?') || value.endsWith('/parquet') || value.includes('/parquet?')) score += 15;
+    if (value.endsWith('.tsv') || value.includes('.tsv?') || value.endsWith('/tsv') || value.includes('/tsv?')) score += 14;
+    if (value.endsWith('.jsonl') || value.includes('.jsonl?') || value.endsWith('/jsonl') || value.includes('/jsonl?')) score += 13;
+    if (value.endsWith('.arff') || value.includes('.arff?') || value.endsWith('/arff') || value.includes('/arff?')) score += 12;
+    if (value.endsWith('.json') || value.includes('.json?') || value.endsWith('/json') || value.includes('/json?')) score += 11;
+    if (value.endsWith('.geojson') || value.includes('.geojson?') || value.endsWith('/geojson') || value.includes('/geojson?')) score += 10;
+    if (value.endsWith('.txt') || value.includes('.txt?') || value.endsWith('/txt') || value.includes('/txt?')) score += 8;
+    if (value.endsWith('.zip') || value.includes('.zip?') || value.endsWith('/zip') || value.includes('/zip?')) score += 7;
     return score;
   }
 

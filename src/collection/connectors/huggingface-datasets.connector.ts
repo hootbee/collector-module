@@ -55,7 +55,7 @@ export class HuggingFaceDatasetsConnector implements DiscoveryConnector {
     const debug: DiscoverySearchOutcome<DatasetDiscoveryHit>['debug'] = [];
     const limit = Math.max(
       2,
-      Math.min(envNumber(['COLLECTION_CONNECTOR_LIMIT_PER_SOURCE', 'DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE'], 10), 10),
+      Math.min(envNumber(['COLLECTION_CONNECTOR_LIMIT_PER_SOURCE', 'DISCOVERY_CONNECTOR_LIMIT_PER_SOURCE'], 20), 24),
     );
     const seenIds = new Set<string>();
 

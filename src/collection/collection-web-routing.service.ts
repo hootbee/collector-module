@@ -13,6 +13,7 @@ import {
   genericFetchLimit,
 } from './collection-layer.config';
 import { CollectionHtmlExtractionService } from './collection-html-extraction.service';
+import { CollectionBrowserFallbackService } from './collection-browser-fallback.service';
 import { CollectionGenericHtmlLlmService } from './collection-generic-html-llm.service';
 import { previewLlmText } from './collection-llm.utils';
 import type {
@@ -32,6 +33,7 @@ type ProcessingOutcome<T extends KnowledgeDiscoveryHit | DatasetDiscoveryHit> = 
 export class CollectionWebRoutingService {
   constructor(
     private readonly htmlExtractionService: CollectionHtmlExtractionService,
+    private readonly browserFallbackService: CollectionBrowserFallbackService,
     private readonly genericHtmlLlmService: CollectionGenericHtmlLlmService,
   ) {}
 
@@ -117,7 +119,7 @@ export class CollectionWebRoutingService {
 
         if (layer === 'generic' && sourceClassification === 'unknown' && url && fetchBudget > 0) {
           fetchBudget -= 1;
-          const fetched = await this.htmlExtractionService.fetchDocument(hit.id, url, 'html');
+          const fetched = await this.fetchUnknownDocumentWithFallback(hit.id, url);
           if (fetched) {
             fetchedDocuments.push(fetched.document);
             updatedHit = {
@@ -138,8 +140,8 @@ export class CollectionWebRoutingService {
                 ],
               }),
               text: `${fetched.metadata.title || updatedHit.title} ${fetched.metadata.description || updatedHit.text}`,
-              extractionMethod: 'html',
-              extractionReliability: 0.58,
+              extractionMethod: fetched.document.extractionMethod,
+              extractionReliability: fetched.document.extractionMethod === 'browser' ? 0.52 : 0.58,
             };
           }
         }
@@ -217,23 +219,34 @@ export class CollectionWebRoutingService {
         };
 
         if (layer === 'generic' && sourceClassification === 'known' && routedConnector) {
+          const knownDownloadUrl =
+            this.knownSourceDownloadUrl(routedConnector, updatedHit.entry.sourceUrl) ||
+            this.knownSourceDownloadUrl(routedConnector, updatedHit.entry.downloadUrl);
+          const knownDownloadReference =
+            this.knownSourceDownloadReference(routedConnector, updatedHit.entry.sourceUrl) ||
+            this.knownSourceDownloadReference(routedConnector, updatedHit.entry.downloadUrl);
+          const knownDownloadMethod = this.knownSourceDownloadMethod(routedConnector);
+          const knownDownloadHint = this.knownSourceDownloadHint(
+            routedConnector,
+            updatedHit.entry.sourceUrl || updatedHit.entry.downloadUrl,
+          );
+
           updatedHit = {
             ...updatedHit,
             entry: buildDatasetEntry({
               ...updatedHit.entry,
               provider: this.providerLabelForConnector(routedConnector),
               downloadUrl:
+                knownDownloadUrl ||
                 updatedHit.entry.downloadUrl ||
-                this.knownSourceDownloadUrl(routedConnector, updatedHit.entry.sourceUrl),
-              downloadMethod:
-                updatedHit.entry.downloadMethod ||
-                this.knownSourceDownloadMethod(routedConnector),
-              downloadHint:
-                updatedHit.entry.downloadHint ||
-                this.knownSourceDownloadHint(routedConnector, updatedHit.entry.sourceUrl),
+                updatedHit.entry.sourceUrl,
+              downloadMethod: knownDownloadMethod,
+              downloadHint: knownDownloadHint || updatedHit.entry.downloadHint,
               downloadReference:
+                knownDownloadReference ||
                 updatedHit.entry.downloadReference ||
-                this.knownSourceDownloadReference(routedConnector, updatedHit.entry.sourceUrl),
+                updatedHit.entry.downloadUrl ||
+                updatedHit.entry.sourceUrl,
               retrievalHint: this.joinHints(
                 updatedHit.entry.retrievalHint,
                 `Generic result rerouted to ${routedConnector}`,
@@ -244,7 +257,7 @@ export class CollectionWebRoutingService {
 
         if (layer === 'generic' && sourceClassification === 'unknown' && url && fetchBudget > 0) {
           fetchBudget -= 1;
-          const fetched = await this.htmlExtractionService.fetchDocument(hit.id, url, 'html');
+          const fetched = await this.fetchUnknownDocumentWithFallback(hit.id, url);
           if (fetched) {
             const planned = await this.genericHtmlLlmService.planDocument({
               pageUrl: url,
@@ -337,8 +350,11 @@ export class CollectionWebRoutingService {
               text: `${plannerTitle || fetched.metadata.title || updatedHit.title} ${
                 plannerDescription || fetched.metadata.description || updatedHit.text
               }`,
-              extractionMethod: 'html',
-              extractionReliability: planned ? 0.64 : 0.56,
+              extractionMethod: fetched.document.extractionMethod,
+              extractionReliability: this.datasetExtractionReliability(
+                fetched.document.extractionMethod,
+                planned != null,
+              ),
               directDownloadAvailable:
                 Boolean(plannerDirectDownloadUrl) ||
                 fetched.metadata.directDownloadAvailable ||
@@ -359,6 +375,39 @@ export class CollectionWebRoutingService {
       routedHits,
       fetchedDocuments,
     };
+  }
+
+  private async fetchUnknownDocumentWithFallback(sourceHitId: string, url: string) {
+    const htmlFetched = await this.htmlExtractionService.fetchDocument(sourceHitId, url, 'html');
+    if (!this.browserFallbackService.isEnabled()) {
+      return htmlFetched;
+    }
+    if (!htmlFetched) {
+      return this.browserFallbackService.fetchDocument(sourceHitId, url);
+    }
+    if (!this.shouldUseBrowserFallback(htmlFetched)) {
+      return htmlFetched;
+    }
+    const browserFetched = await this.browserFallbackService.fetchDocument(sourceHitId, url);
+    return browserFetched ?? htmlFetched;
+  }
+
+  private shouldUseBrowserFallback(fetched: Awaited<ReturnType<CollectionHtmlExtractionService['fetchDocument']>>): boolean {
+    if (!fetched) {
+      return true;
+    }
+    const metadata = fetched.metadata;
+    const weakMetadata = !metadata.title && !metadata.description && metadata.linkCandidates.length === 0;
+    const lowTextSignal = fetched.document.extractedText.length < 160;
+    const noDownloadHints = !metadata.directDownloadAvailable && !metadata.downloadUrl;
+    return weakMetadata || (lowTextSignal && noDownloadHints);
+  }
+
+  private datasetExtractionReliability(extractionMethod: FetchedDocument['extractionMethod'], llmPlanned: boolean): number {
+    if (extractionMethod === 'browser') {
+      return llmPlanned ? 0.6 : 0.5;
+    }
+    return llmPlanned ? 0.64 : 0.56;
   }
 
   private hostFromUrl(url?: string): string | undefined {

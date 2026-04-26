@@ -79,6 +79,6 @@ export function structuredKnowledgeThreshold(requestedSources: CollectionSourceI
 }
 
 export function genericFetchLimit(): number {
-  const raw = Number(process.env.COLLECTION_GENERIC_FETCH_LIMIT ?? '6');
-  return Number.isFinite(raw) && raw > 0 ? Math.min(raw, 12) : 6;
+  const raw = Number(process.env.COLLECTION_GENERIC_FETCH_LIMIT ?? '12');
+  return Number.isFinite(raw) && raw > 0 ? Math.min(raw, 30) : 12;
 }

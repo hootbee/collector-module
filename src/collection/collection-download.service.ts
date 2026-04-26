@@ -68,7 +68,7 @@ export class CollectionDownloadService {
     const targetRoot = this.resolveTargetRoot(input.targetDir);
     const maxFilesPerItem = Math.max(
       1,
-      Math.min(input.maxFilesPerItem ?? envNumber('COLLECTION_DOWNLOAD_MAX_FILES_PER_ITEM', 3), 10),
+      Math.min(input.maxFilesPerItem ?? envNumber('COLLECTION_DOWNLOAD_MAX_FILES_PER_ITEM', 5), 25),
     );
 
     const job = this.storeService.createCollectionDownloadJob({
@@ -320,7 +320,7 @@ export class CollectionDownloadService {
     item: ExternalDatasetItem,
     targetDir: string,
   ): Promise<CollectionDownloadedFile[]> {
-    const reference = item.downloadReference?.trim() || this.extractKaggleReference(item.sourceUrl);
+    const reference = this.resolveKaggleReference(item);
     if (!reference) {
       throw new Error('Kaggle dataset reference is missing.');
     }
@@ -330,7 +330,7 @@ export class CollectionDownloadService {
       env: {
         ...process.env,
       },
-      timeout: envNumber('COLLECTION_DOWNLOAD_TIMEOUT_MS', 60000),
+      timeout: envNumber('COLLECTION_DOWNLOAD_TIMEOUT_MS', 300000),
       maxBuffer: 8 * 1024 * 1024,
     });
 
@@ -339,6 +339,12 @@ export class CollectionDownloadService {
       throw new Error(`Kaggle download completed but no files were saved for ${reference}.`);
     }
     return files;
+  }
+
+  private resolveKaggleReference(item: ExternalDatasetItem): string | undefined {
+    const fromReference = item.downloadReference?.trim();
+    const fromReferenceAsUrl = this.extractKaggleReference(fromReference);
+    return fromReferenceAsUrl || fromReference || this.extractKaggleReference(item.sourceUrl);
   }
 
   private async downloadFromUci(
@@ -392,46 +398,88 @@ export class CollectionDownloadService {
     targetDir: string,
     fallbackName: string,
   ): Promise<CollectionDownloadedFile> {
-    const timeoutMs = envNumber('COLLECTION_DOWNLOAD_TIMEOUT_MS', 60000);
-    const maxBytes = envNumber('COLLECTION_DOWNLOAD_MAX_BYTES', 64 * 1024 * 1024);
+    const timeoutMs = envNumber('COLLECTION_DOWNLOAD_TIMEOUT_MS', 300000);
+    const maxBytes = envNumber('COLLECTION_DOWNLOAD_MAX_BYTES', 1610612736);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const resolvedUrl = this.normalizeDownloadUrl(url);
 
     try {
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': buildUserAgent(),
-        },
-        signal: controller.signal,
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status} for ${url}`);
+      try {
+        const response = await fetch(resolvedUrl, {
+          headers: {
+            'User-Agent': buildUserAgent(),
+          },
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status} for ${resolvedUrl}`);
+        }
+
+        const declaredLength = Number(response.headers.get('content-length') ?? '0');
+        if (declaredLength > 0 && declaredLength > maxBytes) {
+          throw new Error(`Download exceeds max size (${declaredLength} bytes > ${maxBytes} bytes).`);
+        }
+
+        const buffer = Buffer.from(await response.arrayBuffer());
+        if (buffer.byteLength > maxBytes) {
+          throw new Error(`Downloaded file exceeds max size (${buffer.byteLength} bytes > ${maxBytes} bytes).`);
+        }
+
+        const fileName = this.resolveFileName(resolvedUrl, response.headers.get('content-type'), response.headers.get('content-disposition'), fallbackName);
+        const path = join(targetDir, fileName);
+        await mkdir(targetDir, { recursive: true });
+        await writeFile(path, buffer);
+
+        return {
+          fileName,
+          path,
+          bytes: buffer.byteLength,
+          sourceUrl: resolvedUrl,
+          contentType: response.headers.get('content-type') ?? undefined,
+        };
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error(`Download timed out after ${timeoutMs}ms for ${resolvedUrl}.`);
+        }
+        throw error;
       }
-
-      const declaredLength = Number(response.headers.get('content-length') ?? '0');
-      if (declaredLength > 0 && declaredLength > maxBytes) {
-        throw new Error(`Download exceeds max size (${declaredLength} bytes > ${maxBytes} bytes).`);
-      }
-
-      const buffer = Buffer.from(await response.arrayBuffer());
-      if (buffer.byteLength > maxBytes) {
-        throw new Error(`Downloaded file exceeds max size (${buffer.byteLength} bytes > ${maxBytes} bytes).`);
-      }
-
-      const fileName = this.resolveFileName(url, response.headers.get('content-type'), response.headers.get('content-disposition'), fallbackName);
-      const path = join(targetDir, fileName);
-      await mkdir(targetDir, { recursive: true });
-      await writeFile(path, buffer);
-
-      return {
-        fileName,
-        path,
-        bytes: buffer.byteLength,
-        sourceUrl: url,
-        contentType: response.headers.get('content-type') ?? undefined,
-      };
     } finally {
       clearTimeout(timeout);
+    }
+  }
+
+  private normalizeDownloadUrl(url: string): string {
+    const githubRaw = this.githubBlobToRaw(url);
+    if (githubRaw) {
+      return githubRaw;
+    }
+    return url;
+  }
+
+  private githubBlobToRaw(url: string): string | null {
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
+      if (host !== 'github.com') {
+        return null;
+      }
+      const parts = parsed.pathname.split('/').filter(Boolean);
+      if (parts.length < 5 || parts[2] !== 'blob') {
+        return null;
+      }
+      const owner = parts[0];
+      const repo = parts[1];
+      const branch = parts[3];
+      const path = parts.slice(4).join('/');
+      if (!owner || !repo || !branch || !path) {
+        return null;
+      }
+      const raw = new URL(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`);
+      parsed.searchParams.forEach((value, key) => raw.searchParams.set(key, value));
+      return raw.toString();
+    } catch {
+      return null;
     }
   }
 
