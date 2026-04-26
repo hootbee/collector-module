@@ -19,6 +19,7 @@ import type {
   OrchestratorJobResultsResponse,
   OrchestratorJobStatusResponse,
   OrchestratorModuleType,
+  PipelineRecord,
   RefreshTokenRecord,
   UserRecord,
 } from '../common/contracts';
@@ -31,6 +32,7 @@ export class StoreService {
   private readonly collectionDownloadJobs = new Map<string, CollectionDownloadJobRecord>();
   private readonly orchestratorJobs = new Map<string, OrchestratorJobRecord>();
   private readonly orchestratorLogs = new Map<string, OrchestratorJobLogRecord[]>();
+  private readonly pipelines = new Map<string, PipelineRecord>();
   private memoryLogId = 1;
   private readonly users = new Map<string, UserRecord>();
   private readonly oauthAccounts = new Map<string, OAuthAccountRecord>();
@@ -268,6 +270,98 @@ export class StoreService {
       return result.rows.map((row) => this.jobLogFromRow(row));
     }
     return [...(this.orchestratorLogs.get(jobId) ?? [])];
+  }
+
+  async createPipeline(input: {
+    userId?: string | null;
+    kind: string;
+    domainKey?: string | null;
+    domainLabel?: string | null;
+    title: string;
+    description?: string;
+    moduleIds?: string[];
+    connectedAfter?: string[];
+    moduleLayout?: Record<string, unknown>;
+    highlight?: string | null;
+    autoNamed?: boolean;
+  }): Promise<PipelineRecord> {
+    const now = nowIso();
+    const pipeline: PipelineRecord = {
+      id: `pipe-${randomUUID().replace(/-/g, '').slice(0, 12)}`,
+      userId: input.userId ?? null,
+      kind: input.kind,
+      domainKey: input.domainKey ?? null,
+      domainLabel: input.domainLabel ?? null,
+      title: input.title,
+      description: input.description ?? '',
+      moduleIds: [...(input.moduleIds ?? [])],
+      connectedAfter: [...(input.connectedAfter ?? [])],
+      moduleLayout: { ...(input.moduleLayout ?? {}) },
+      highlight: input.highlight ?? null,
+      autoNamed: input.autoNamed ?? false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.pipelines.set(pipeline.id, pipeline);
+    await this.persistPipeline(pipeline);
+    return pipeline;
+  }
+
+  async listPipelines(userId?: string | null): Promise<PipelineRecord[]> {
+    if (this.usePostgres()) {
+      const result = userId
+        ? await this.databaseService.query<PipelineRow>(
+            'select * from pipelines where user_id = $1 order by updated_at desc',
+            [userId],
+          )
+        : await this.databaseService.query<PipelineRow>(
+            'select * from pipelines order by updated_at desc limit 100',
+          );
+      return result.rows.map((row) => this.pipelineFromRow(row));
+    }
+    return [...this.pipelines.values()]
+      .filter((pipeline) => !userId || pipeline.userId === userId)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+
+  async getPipeline(pipelineId: string): Promise<PipelineRecord | undefined> {
+    const cached = this.pipelines.get(pipelineId);
+    if (cached) {
+      return cached;
+    }
+    if (!this.usePostgres()) {
+      return undefined;
+    }
+    const result = await this.databaseService.query<PipelineRow>(
+      'select * from pipelines where id = $1',
+      [pipelineId],
+    );
+    const pipeline = result.rows[0] ? this.pipelineFromRow(result.rows[0]) : undefined;
+    if (pipeline) {
+      this.pipelines.set(pipeline.id, pipeline);
+    }
+    return pipeline;
+  }
+
+  async updatePipelineModules(pipelineId: string, payload: {
+    moduleIds: string[];
+    connectedAfter: string[];
+    moduleLayout: Record<string, unknown>;
+  }): Promise<PipelineRecord | undefined> {
+    const pipeline = await this.getPipeline(pipelineId);
+    if (!pipeline) {
+      return undefined;
+    }
+    const next: PipelineRecord = {
+      ...pipeline,
+      moduleIds: [...payload.moduleIds],
+      connectedAfter: [...payload.connectedAfter],
+      moduleLayout: { ...payload.moduleLayout },
+      updatedAt: nowIso(),
+    };
+    this.pipelines.set(next.id, next);
+    await this.persistPipeline(next);
+    return next;
   }
 
   async createCollectionJob(input: {
@@ -711,6 +805,39 @@ export class StoreService {
     );
   }
 
+  private async persistPipeline(pipeline: PipelineRecord): Promise<void> {
+    if (!this.usePostgres()) {
+      return;
+    }
+    await this.databaseService.query(
+      [
+        'insert into pipelines (id, user_id, kind, domain_key, domain_label, title, description, module_ids, connected_after, module_layout, highlight, auto_named, created_at, updated_at)',
+        'values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)',
+        'on conflict (id) do update set',
+        'user_id = excluded.user_id, kind = excluded.kind, domain_key = excluded.domain_key, domain_label = excluded.domain_label,',
+        'title = excluded.title, description = excluded.description, module_ids = excluded.module_ids,',
+        'connected_after = excluded.connected_after, module_layout = excluded.module_layout,',
+        'highlight = excluded.highlight, auto_named = excluded.auto_named, updated_at = excluded.updated_at',
+      ].join(' '),
+      [
+        pipeline.id,
+        pipeline.userId,
+        pipeline.kind,
+        pipeline.domainKey,
+        pipeline.domainLabel,
+        pipeline.title,
+        pipeline.description,
+        JSON.stringify(pipeline.moduleIds),
+        JSON.stringify(pipeline.connectedAfter),
+        JSON.stringify(pipeline.moduleLayout),
+        pipeline.highlight,
+        pipeline.autoNamed,
+        pipeline.createdAt,
+        pipeline.updatedAt,
+      ],
+    );
+  }
+
   private async persistCollectionJob(job: CollectionJobRecord): Promise<void> {
     if (!this.usePostgres()) {
       return;
@@ -916,11 +1043,34 @@ export class StoreService {
     };
   }
 
+  private pipelineFromRow(row: PipelineRow): PipelineRecord {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      kind: row.kind,
+      domainKey: row.domain_key,
+      domainLabel: row.domain_label,
+      title: row.title,
+      description: row.description,
+      moduleIds: this.stringListFromJson(row.module_ids),
+      connectedAfter: this.stringListFromJson(row.connected_after),
+      moduleLayout: this.objectFromJson(row.module_layout),
+      highlight: row.highlight,
+      autoNamed: row.auto_named,
+      createdAt: this.iso(row.created_at),
+      updatedAt: this.iso(row.updated_at),
+    };
+  }
+
   private objectFromJson(value: unknown): Record<string, unknown> {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return {};
     }
     return value as Record<string, unknown>;
+  }
+
+  private stringListFromJson(value: unknown): string[] {
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
   }
 
   private iso(value: string | Date): string {
@@ -981,4 +1131,21 @@ type JobLogRow = {
   message: string;
   context: unknown;
   created_at: string | Date;
+};
+
+type PipelineRow = {
+  id: string;
+  user_id: string | null;
+  kind: string;
+  domain_key: string | null;
+  domain_label: string | null;
+  title: string;
+  description: string;
+  module_ids: unknown;
+  connected_after: unknown;
+  module_layout: unknown;
+  highlight: string | null;
+  auto_named: boolean;
+  created_at: string | Date;
+  updated_at: string | Date;
 };

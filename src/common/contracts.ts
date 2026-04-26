@@ -490,6 +490,46 @@ export type OrchestratorJobLogRecord = {
   createdAt: string;
 };
 
+export type PipelineModuleLayout = Record<string, unknown>;
+
+export type PipelineRecord = {
+  id: string;
+  userId: string | null;
+  kind: string;
+  domainKey: string | null;
+  domainLabel: string | null;
+  title: string;
+  description: string;
+  moduleIds: string[];
+  connectedAfter: string[];
+  moduleLayout: PipelineModuleLayout;
+  highlight: string | null;
+  autoNamed: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SharedPipelineTemplate = {
+  id: string;
+  kind: string;
+  domainKey: string | null;
+  domainLabel: string | null;
+  title: string;
+  description: string;
+  moduleIds: string[];
+  connectedAfter: string[];
+  moduleLayout: PipelineModuleLayout;
+  highlight: string | null;
+};
+
+export type PipelineResponse = {
+  pipeline: PipelineRecord;
+};
+
+export type PipelineTemplateListResponse = {
+  templates: SharedPipelineTemplate[];
+};
+
 export type SessionRecord = {
   id: string;
   createdAt: string;
