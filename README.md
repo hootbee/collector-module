@@ -177,6 +177,24 @@ DB_SMOKE_MIGRATE=true npm run db:smoke
 docker compose -f docker-compose.postgres.yml up -d
 ```
 
+백엔드 + PostgreSQL 통합 컨테이너 실행:
+
+```bash
+docker compose up --build -d
+```
+
+백엔드 로그 확인:
+
+```bash
+docker compose logs -f backend
+```
+
+중지:
+
+```bash
+docker compose down
+```
+
 HTTP health:
 
 ```http
