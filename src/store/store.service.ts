@@ -13,6 +13,7 @@ import type {
   CollectionKind,
   CollectionLlmPlan,
   CollectionSourceId,
+  DataSourceRecord,
   OAuthAccountRecord,
   OrchestratorJobLogRecord,
   OrchestratorJobRecord,
@@ -33,6 +34,7 @@ export class StoreService {
   private readonly orchestratorJobs = new Map<string, OrchestratorJobRecord>();
   private readonly orchestratorLogs = new Map<string, OrchestratorJobLogRecord[]>();
   private readonly pipelines = new Map<string, PipelineRecord>();
+  private readonly dataSources = new Map<string, DataSourceRecord>();
   private memoryLogId = 1;
   private readonly users = new Map<string, UserRecord>();
   private readonly oauthAccounts = new Map<string, OAuthAccountRecord>();
@@ -362,6 +364,109 @@ export class StoreService {
     this.pipelines.set(next.id, next);
     await this.persistPipeline(next);
     return next;
+  }
+
+  async createDataSource(input: {
+    userId?: string | null;
+    name: string;
+    source: string;
+    rowsLabel?: string | null;
+    linkedPipelineId?: string | null;
+    domainIndustryContext?: string | null;
+    domainSubjectScope?: string | null;
+    domainRegulationScope?: string | null;
+    domainStakeholderNotes?: string | null;
+    dataModality?: string | null;
+    rowUnit?: string | null;
+    sensitivityNote?: string | null;
+  }): Promise<DataSourceRecord> {
+    const now = nowIso();
+    const record: DataSourceRecord = {
+      id: `ds-${randomUUID().replace(/-/g, '').slice(0, 12)}`,
+      userId: input.userId ?? null,
+      name: input.name,
+      source: input.source,
+      rowsLabel: input.rowsLabel ?? null,
+      linkedPipelineId: input.linkedPipelineId ?? null,
+      domainIndustryContext: input.domainIndustryContext ?? null,
+      domainSubjectScope: input.domainSubjectScope ?? null,
+      domainRegulationScope: input.domainRegulationScope ?? null,
+      domainStakeholderNotes: input.domainStakeholderNotes ?? null,
+      dataModality: input.dataModality ?? null,
+      rowUnit: input.rowUnit ?? null,
+      sensitivityNote: input.sensitivityNote ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.dataSources.set(record.id, record);
+    await this.persistDataSource(record);
+    return record;
+  }
+
+  async listDataSources(userId?: string | null): Promise<DataSourceRecord[]> {
+    if (this.usePostgres()) {
+      const result = userId
+        ? await this.databaseService.query<DataSourceRow>(
+            'select * from data_sources where user_id = $1 order by updated_at desc',
+            [userId],
+          )
+        : await this.databaseService.query<DataSourceRow>(
+            'select * from data_sources order by updated_at desc limit 100',
+          );
+      return result.rows.map((row) => this.dataSourceFromRow(row));
+    }
+    return [...this.dataSources.values()]
+      .filter((record) => !userId || record.userId === userId)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+
+  async getDataSource(dataSourceId: string): Promise<DataSourceRecord | undefined> {
+    const cached = this.dataSources.get(dataSourceId);
+    if (cached) {
+      return cached;
+    }
+    if (!this.usePostgres()) {
+      return undefined;
+    }
+    const result = await this.databaseService.query<DataSourceRow>(
+      'select * from data_sources where id = $1',
+      [dataSourceId],
+    );
+    const record = result.rows[0] ? this.dataSourceFromRow(result.rows[0]) : undefined;
+    if (record) {
+      this.dataSources.set(record.id, record);
+    }
+    return record;
+  }
+
+  async updateDataSource(
+    dataSourceId: string,
+    patch: Partial<Omit<DataSourceRecord, 'id' | 'createdAt' | 'updatedAt'>>,
+  ): Promise<DataSourceRecord | undefined> {
+    const current = await this.getDataSource(dataSourceId);
+    if (!current) {
+      return undefined;
+    }
+    const next: DataSourceRecord = {
+      ...current,
+      ...patch,
+      updatedAt: nowIso(),
+    };
+    this.dataSources.set(next.id, next);
+    await this.persistDataSource(next);
+    return next;
+  }
+
+  async deleteDataSource(dataSourceId: string): Promise<boolean> {
+    if (this.usePostgres()) {
+      const result = await this.databaseService.query(
+        'delete from data_sources where id = $1',
+        [dataSourceId],
+      );
+      this.dataSources.delete(dataSourceId);
+      return (result.rowCount ?? 0) > 0;
+    }
+    return this.dataSources.delete(dataSourceId);
   }
 
   async createCollectionJob(input: {
@@ -838,6 +943,41 @@ export class StoreService {
     );
   }
 
+  private async persistDataSource(record: DataSourceRecord): Promise<void> {
+    if (!this.usePostgres()) {
+      return;
+    }
+    await this.databaseService.query(
+      [
+        'insert into data_sources (id, user_id, name, source, rows_label, linked_pipeline_id, domain_industry_context, domain_subject_scope, domain_regulation_scope, domain_stakeholder_notes, data_modality, row_unit, sensitivity_note, created_at, updated_at)',
+        'values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)',
+        'on conflict (id) do update set',
+        'user_id = excluded.user_id, name = excluded.name, source = excluded.source, rows_label = excluded.rows_label,',
+        'linked_pipeline_id = excluded.linked_pipeline_id, domain_industry_context = excluded.domain_industry_context,',
+        'domain_subject_scope = excluded.domain_subject_scope, domain_regulation_scope = excluded.domain_regulation_scope,',
+        'domain_stakeholder_notes = excluded.domain_stakeholder_notes, data_modality = excluded.data_modality,',
+        'row_unit = excluded.row_unit, sensitivity_note = excluded.sensitivity_note, updated_at = excluded.updated_at',
+      ].join(' '),
+      [
+        record.id,
+        record.userId,
+        record.name,
+        record.source,
+        record.rowsLabel,
+        record.linkedPipelineId,
+        record.domainIndustryContext,
+        record.domainSubjectScope,
+        record.domainRegulationScope,
+        record.domainStakeholderNotes,
+        record.dataModality,
+        record.rowUnit,
+        record.sensitivityNote,
+        record.createdAt,
+        record.updatedAt,
+      ],
+    );
+  }
+
   private async persistCollectionJob(job: CollectionJobRecord): Promise<void> {
     if (!this.usePostgres()) {
       return;
@@ -1062,6 +1202,26 @@ export class StoreService {
     };
   }
 
+  private dataSourceFromRow(row: DataSourceRow): DataSourceRecord {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      name: row.name,
+      source: row.source,
+      rowsLabel: row.rows_label,
+      linkedPipelineId: row.linked_pipeline_id,
+      domainIndustryContext: row.domain_industry_context,
+      domainSubjectScope: row.domain_subject_scope,
+      domainRegulationScope: row.domain_regulation_scope,
+      domainStakeholderNotes: row.domain_stakeholder_notes,
+      dataModality: row.data_modality,
+      rowUnit: row.row_unit,
+      sensitivityNote: row.sensitivity_note,
+      createdAt: this.iso(row.created_at),
+      updatedAt: this.iso(row.updated_at),
+    };
+  }
+
   private objectFromJson(value: unknown): Record<string, unknown> {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return {};
@@ -1146,6 +1306,24 @@ type PipelineRow = {
   module_layout: unknown;
   highlight: string | null;
   auto_named: boolean;
+  created_at: string | Date;
+  updated_at: string | Date;
+};
+
+type DataSourceRow = {
+  id: string;
+  user_id: string | null;
+  name: string;
+  source: string;
+  rows_label: string | null;
+  linked_pipeline_id: string | null;
+  domain_industry_context: string | null;
+  domain_subject_scope: string | null;
+  domain_regulation_scope: string | null;
+  domain_stakeholder_notes: string | null;
+  data_modality: string | null;
+  row_unit: string | null;
+  sensitivity_note: string | null;
   created_at: string | Date;
   updated_at: string | Date;
 };

@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { CollectionController } from './collection/collection.controller';
+import { DataSourcesController } from './data-sources/data-sources.controller';
+import { DataSourcesService } from './data-sources/data-sources.service';
 import { DatabaseModule } from './database/database.module';
 import { CollectionConnectorRegistryService } from './collection/connectors/connector-registry.service';
 import { CrossrefKnowledgeConnector } from './collection/connectors/crossref-knowledge.connector';
@@ -33,7 +35,7 @@ import { StoreModule } from './store/store.module';
 
 @Module({
   imports: [StoreModule, DatabaseModule, AuthModule],
-  controllers: [AppController, CollectionController, OrchestratorController, PipelinesController],
+  controllers: [AppController, CollectionController, OrchestratorController, PipelinesController, DataSourcesController],
   providers: [
     SeedCatalogConnector,
     HuggingFaceDatasetsConnector,
@@ -59,6 +61,7 @@ import { StoreModule } from './store/store.module';
     OrchestratorModuleRegistryService,
     OrchestratorService,
     PipelinesService,
+    DataSourcesService,
   ],
 })
 export class AppModule {}

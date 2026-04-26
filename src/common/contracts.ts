@@ -530,6 +530,32 @@ export type PipelineTemplateListResponse = {
   templates: SharedPipelineTemplate[];
 };
 
+export type DataSourceRecord = {
+  id: string;
+  userId: string | null;
+  name: string;
+  source: string;
+  rowsLabel: string | null;
+  linkedPipelineId: string | null;
+  domainIndustryContext: string | null;
+  domainSubjectScope: string | null;
+  domainRegulationScope: string | null;
+  domainStakeholderNotes: string | null;
+  dataModality: string | null;
+  rowUnit: string | null;
+  sensitivityNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DataSourceResponse = {
+  dataSource: DataSourceRecord;
+};
+
+export type DataSourceListResponse = {
+  dataSources: DataSourceRecord[];
+};
+
 export type SessionRecord = {
   id: string;
   createdAt: string;

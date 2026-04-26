@@ -46,6 +46,8 @@ create table if not exists data_sources (
   updated_at timestamptz not null default now()
 );
 
+alter table data_sources alter column user_id drop not null;
+
 create table if not exists pipelines (
   id text primary key,
   user_id text references users(id) on delete cascade,
