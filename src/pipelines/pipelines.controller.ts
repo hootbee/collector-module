@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { PipelinesService } from './pipelines.service';
 
 @Controller()
@@ -31,9 +31,60 @@ export class PipelinesController {
     return this.pipelinesService.listPipelines(userId?.trim() || null);
   }
 
+  @Post('pipelines')
+  createPipeline(
+    @Body()
+    body: {
+      userId?: string;
+      kind?: string;
+      domainKey?: string;
+      domainLabel?: string;
+      title?: string;
+      description?: string;
+      moduleIds?: string[];
+      connectedAfter?: string[];
+      moduleLayout?: Record<string, unknown>;
+      highlight?: string;
+      autoNamed?: boolean;
+    },
+  ) {
+    return this.pipelinesService.createPipeline(body);
+  }
+
   @Get('pipelines/:pipelineId')
   getPipeline(@Param('pipelineId') pipelineId: string) {
     return this.pipelinesService.getPipeline(pipelineId);
+  }
+
+  @Patch('pipelines/:pipelineId')
+  updatePipeline(
+    @Param('pipelineId') pipelineId: string,
+    @Body()
+    body: {
+      userId?: string;
+      kind?: string;
+      domainKey?: string;
+      domainLabel?: string;
+      title?: string;
+      description?: string;
+      highlight?: string;
+      autoNamed?: boolean;
+    },
+  ) {
+    return this.pipelinesService.updatePipeline(pipelineId, body);
+  }
+
+  @Post('pipelines/:pipelineId/duplicate')
+  duplicatePipeline(
+    @Param('pipelineId') pipelineId: string,
+    @Body() body: { userId?: string; title?: string },
+  ) {
+    return this.pipelinesService.duplicatePipeline(pipelineId, body);
+  }
+
+  @Delete('pipelines/:pipelineId')
+  deletePipeline(@Param('pipelineId') pipelineId: string) {
+    return this.pipelinesService.deletePipeline(pipelineId);
   }
 
   @Post('pipelines/:pipelineId/modules')
@@ -51,6 +102,47 @@ export class PipelinesController {
       afterModuleId: body.afterModuleId,
       layout: body.layout,
     });
+  }
+
+  @Patch('pipelines/:pipelineId/modules/reorder')
+  reorderModules(
+    @Param('pipelineId') pipelineId: string,
+    @Body() body: { moduleIds?: string[] },
+  ) {
+    return this.pipelinesService.reorderModules(pipelineId, body);
+  }
+
+  @Patch('pipelines/:pipelineId/modules/:moduleId/position')
+  updateModulePosition(
+    @Param('pipelineId') pipelineId: string,
+    @Param('moduleId') moduleId: string,
+    @Body() body: { position?: { x?: number; y?: number } },
+  ) {
+    return this.pipelinesService.updateModulePosition(pipelineId, moduleId, body);
+  }
+
+  @Patch('pipelines/:pipelineId/connections')
+  updateConnections(
+    @Param('pipelineId') pipelineId: string,
+    @Body() body: { connectedAfter?: string[] },
+  ) {
+    return this.pipelinesService.updateConnections(pipelineId, body);
+  }
+
+  @Post('pipelines/:pipelineId/connections/:moduleId/connect')
+  connectAfter(
+    @Param('pipelineId') pipelineId: string,
+    @Param('moduleId') moduleId: string,
+  ) {
+    return this.pipelinesService.connectAfter(pipelineId, moduleId);
+  }
+
+  @Delete('pipelines/:pipelineId/connections/:moduleId')
+  disconnectAfter(
+    @Param('pipelineId') pipelineId: string,
+    @Param('moduleId') moduleId: string,
+  ) {
+    return this.pipelinesService.disconnectAfter(pipelineId, moduleId);
   }
 
   @Delete('pipelines/:pipelineId/modules/:moduleId')

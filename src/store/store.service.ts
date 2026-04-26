@@ -366,6 +366,56 @@ export class StoreService {
     return next;
   }
 
+  async updatePipeline(
+    pipelineId: string,
+    patch: Partial<Omit<PipelineRecord, 'id' | 'createdAt' | 'updatedAt'>>,
+  ): Promise<PipelineRecord | undefined> {
+    const pipeline = await this.getPipeline(pipelineId);
+    if (!pipeline) {
+      return undefined;
+    }
+    const next: PipelineRecord = {
+      ...pipeline,
+      ...patch,
+      moduleIds: patch.moduleIds ? [...patch.moduleIds] : pipeline.moduleIds,
+      connectedAfter: patch.connectedAfter ? [...patch.connectedAfter] : pipeline.connectedAfter,
+      moduleLayout: patch.moduleLayout ? { ...patch.moduleLayout } : pipeline.moduleLayout,
+      updatedAt: nowIso(),
+    };
+    this.pipelines.set(next.id, next);
+    await this.persistPipeline(next);
+    return next;
+  }
+
+  async deletePipeline(pipelineId: string): Promise<boolean> {
+    if (this.usePostgres()) {
+      await this.databaseService.query(
+        'update data_sources set linked_pipeline_id = null where linked_pipeline_id = $1',
+        [pipelineId],
+      );
+      const result = await this.databaseService.query(
+        'delete from pipelines where id = $1',
+        [pipelineId],
+      );
+      this.pipelines.delete(pipelineId);
+      return (result.rowCount ?? 0) > 0;
+    }
+    if (!this.pipelines.has(pipelineId)) {
+      return false;
+    }
+    this.pipelines.delete(pipelineId);
+    this.dataSources.forEach((dataSource, dataSourceId) => {
+      if (dataSource.linkedPipelineId === pipelineId) {
+        this.dataSources.set(dataSourceId, {
+          ...dataSource,
+          linkedPipelineId: null,
+          updatedAt: nowIso(),
+        });
+      }
+    });
+    return true;
+  }
+
   async createDataSource(input: {
     userId?: string | null;
     name: string;
