@@ -556,6 +556,36 @@ export type DataSourceListResponse = {
   dataSources: DataSourceRecord[];
 };
 
+export type ModuleSnapshotRecord = {
+  id: string;
+  userId: string | null;
+  pipelineId: string;
+  moduleId: string;
+  summary: string;
+  data: Record<string, unknown> | null;
+  savedAt: string;
+};
+
+export type ModuleSnapshotResponse = {
+  moduleSnapshot: ModuleSnapshotRecord;
+};
+
+export type ModuleSnapshotListResponse = {
+  moduleSnapshots: ModuleSnapshotRecord[];
+};
+
+export type ModuleCatalogItem = {
+  id: string;
+  label: string;
+  description: string;
+  domainKey?: string;
+  pipelineFrom: string[];
+};
+
+export type ModuleCatalogResponse = {
+  modules: ModuleCatalogItem[];
+};
+
 export type SessionRecord = {
   id: string;
   createdAt: string;

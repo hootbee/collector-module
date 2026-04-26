@@ -14,6 +14,7 @@ import type {
   CollectionLlmPlan,
   CollectionSourceId,
   DataSourceRecord,
+  ModuleSnapshotRecord,
   OAuthAccountRecord,
   OrchestratorJobLogRecord,
   OrchestratorJobRecord,
@@ -35,6 +36,7 @@ export class StoreService {
   private readonly orchestratorLogs = new Map<string, OrchestratorJobLogRecord[]>();
   private readonly pipelines = new Map<string, PipelineRecord>();
   private readonly dataSources = new Map<string, DataSourceRecord>();
+  private readonly moduleSnapshots = new Map<string, ModuleSnapshotRecord>();
   private memoryLogId = 1;
   private readonly users = new Map<string, UserRecord>();
   private readonly oauthAccounts = new Map<string, OAuthAccountRecord>();
@@ -517,6 +519,82 @@ export class StoreService {
       return (result.rowCount ?? 0) > 0;
     }
     return this.dataSources.delete(dataSourceId);
+  }
+
+  async saveModuleSnapshot(input: {
+    userId?: string | null;
+    pipelineId: string;
+    moduleId: string;
+    summary?: string;
+    data?: Record<string, unknown> | null;
+  }): Promise<ModuleSnapshotRecord> {
+    const snapshot: ModuleSnapshotRecord = {
+      id: this.moduleSnapshotId(input.pipelineId, input.moduleId, input.userId ?? null),
+      userId: input.userId ?? null,
+      pipelineId: input.pipelineId,
+      moduleId: input.moduleId,
+      summary: input.summary ?? '',
+      data: input.data ?? null,
+      savedAt: nowIso(),
+    };
+    this.moduleSnapshots.set(snapshot.id, snapshot);
+    await this.persistModuleSnapshot(snapshot);
+    return snapshot;
+  }
+
+  async getModuleSnapshot(input: {
+    pipelineId: string;
+    moduleId: string;
+    userId?: string | null;
+  }): Promise<ModuleSnapshotRecord | undefined> {
+    const snapshotId = this.moduleSnapshotId(input.pipelineId, input.moduleId, input.userId ?? null);
+    const cached = this.moduleSnapshots.get(snapshotId);
+    if (cached) {
+      return cached;
+    }
+    if (!this.usePostgres()) {
+      return undefined;
+    }
+    const result = await this.databaseService.query<ModuleSnapshotRow>(
+      [
+        'select * from module_snapshots',
+        'where pipeline_id = $1 and module_id = $2 and user_id is not distinct from $3',
+      ].join(' '),
+      [input.pipelineId, input.moduleId, input.userId ?? null],
+    );
+    const snapshot = result.rows[0] ? this.moduleSnapshotFromRow(result.rows[0]) : undefined;
+    if (snapshot) {
+      this.moduleSnapshots.set(snapshot.id, snapshot);
+    }
+    return snapshot;
+  }
+
+  async listModuleSnapshots(input: {
+    pipelineId: string;
+    userId?: string | null;
+  }): Promise<ModuleSnapshotRecord[]> {
+    if (this.usePostgres()) {
+      const result = input.userId !== undefined
+        ? await this.databaseService.query<ModuleSnapshotRow>(
+            [
+              'select * from module_snapshots',
+              'where pipeline_id = $1 and user_id is not distinct from $2',
+              'order by saved_at desc',
+            ].join(' '),
+            [input.pipelineId, input.userId ?? null],
+          )
+        : await this.databaseService.query<ModuleSnapshotRow>(
+            'select * from module_snapshots where pipeline_id = $1 order by saved_at desc',
+            [input.pipelineId],
+          );
+      return result.rows.map((row) => this.moduleSnapshotFromRow(row));
+    }
+    return [...this.moduleSnapshots.values()]
+      .filter((snapshot) => (
+        snapshot.pipelineId === input.pipelineId
+        && (input.userId === undefined || snapshot.userId === (input.userId ?? null))
+      ))
+      .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
   }
 
   async createCollectionJob(input: {
@@ -1028,6 +1106,30 @@ export class StoreService {
     );
   }
 
+  private async persistModuleSnapshot(snapshot: ModuleSnapshotRecord): Promise<void> {
+    if (!this.usePostgres()) {
+      return;
+    }
+    await this.databaseService.query(
+      [
+        'insert into module_snapshots (id, user_id, pipeline_id, module_id, summary, data, saved_at)',
+        'values ($1, $2, $3, $4, $5, $6, $7)',
+        'on conflict (id) do update set',
+        'user_id = excluded.user_id, pipeline_id = excluded.pipeline_id, module_id = excluded.module_id,',
+        'summary = excluded.summary, data = excluded.data, saved_at = excluded.saved_at',
+      ].join(' '),
+      [
+        snapshot.id,
+        snapshot.userId,
+        snapshot.pipelineId,
+        snapshot.moduleId,
+        snapshot.summary,
+        JSON.stringify(snapshot.data),
+        snapshot.savedAt,
+      ],
+    );
+  }
+
   private async persistCollectionJob(job: CollectionJobRecord): Promise<void> {
     if (!this.usePostgres()) {
       return;
@@ -1272,6 +1374,24 @@ export class StoreService {
     };
   }
 
+  private moduleSnapshotFromRow(row: ModuleSnapshotRow): ModuleSnapshotRecord {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      pipelineId: row.pipeline_id,
+      moduleId: row.module_id,
+      summary: row.summary,
+      data: row.data && typeof row.data === 'object' && !Array.isArray(row.data)
+        ? row.data as Record<string, unknown>
+        : null,
+      savedAt: this.iso(row.saved_at),
+    };
+  }
+
+  private moduleSnapshotId(pipelineId: string, moduleId: string, userId: string | null): string {
+    return `snapshot:${userId ?? 'anonymous'}:${pipelineId}:${moduleId}`;
+  }
+
   private objectFromJson(value: unknown): Record<string, unknown> {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return {};
@@ -1376,4 +1496,14 @@ type DataSourceRow = {
   sensitivity_note: string | null;
   created_at: string | Date;
   updated_at: string | Date;
+};
+
+type ModuleSnapshotRow = {
+  id: string;
+  user_id: string | null;
+  pipeline_id: string;
+  module_id: string;
+  summary: string;
+  data: unknown;
+  saved_at: string | Date;
 };

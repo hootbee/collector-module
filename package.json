@@ -15,6 +15,7 @@
     "orchestrator:smoke": "ts-node src/scripts/orchestrator-smoke.ts",
     "pipeline:smoke": "ts-node src/scripts/pipeline-smoke.ts",
     "pipeline:crud:smoke": "ts-node src/scripts/pipeline-crud-smoke.ts",
+    "module:integration:smoke": "ts-node src/scripts/module-integration-smoke.ts",
     "collection:smoke": "ts-node src/scripts/collection-smoke.ts",
     "collection:browser:smoke": "ts-node src/scripts/collection-browser-fallback-smoke.ts",
     "collection:download:smoke": "ts-node src/scripts/collection-download-smoke.ts"

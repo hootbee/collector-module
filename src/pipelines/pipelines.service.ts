@@ -1,16 +1,36 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type {
+  CollectionJobStatusResponse,
+  CollectionSourceId,
+  ModalitySignal,
+  ModuleSnapshotListResponse,
+  ModuleSnapshotResponse,
   PipelineRecord,
   PipelineResponse,
   PipelineTemplateListResponse,
   SharedPipelineTemplate,
+  TaskSignal,
 } from '../common/contracts';
+import { CollectionService } from '../collection/collection.service';
 import { StoreService } from '../store/store.service';
 import { sharedPipelineTemplates } from './shared-pipeline-templates';
 
+const collectionSources: CollectionSourceId[] = [
+  'seed-catalog',
+  'huggingface',
+  'openml',
+  'uci',
+  'kaggle',
+  'serpapi',
+  'crossref',
+];
+
 @Injectable()
 export class PipelinesService {
-  constructor(private readonly storeService: StoreService) {}
+  constructor(
+    private readonly storeService: StoreService,
+    private readonly collectionService: CollectionService,
+  ) {}
 
   listSharedTemplates(): PipelineTemplateListResponse {
     return {
@@ -298,6 +318,114 @@ export class PipelinesService {
     return this.updateModules(pipeline.id, pipeline.moduleIds, connectedAfter, pipeline.moduleLayout);
   }
 
+  async listModuleSnapshots(pipelineId: string, userId?: string | null): Promise<ModuleSnapshotListResponse> {
+    await this.loadPipeline(pipelineId);
+    return {
+      moduleSnapshots: await this.storeService.listModuleSnapshots({
+        pipelineId,
+        userId: userId === undefined ? undefined : this.cleanOptional(userId),
+      }),
+    };
+  }
+
+  async getModuleSnapshot(
+    pipelineId: string,
+    moduleId: string,
+    userId?: string | null,
+  ): Promise<ModuleSnapshotResponse> {
+    await this.loadPipeline(pipelineId);
+    const moduleSnapshot = await this.storeService.getModuleSnapshot({
+      pipelineId,
+      moduleId: moduleId.trim(),
+      userId: userId === undefined ? undefined : this.cleanOptional(userId),
+    });
+    if (!moduleSnapshot) {
+      throw new NotFoundException(`Module snapshot was not found for moduleId=${moduleId}.`);
+    }
+    return { moduleSnapshot };
+  }
+
+  async saveModuleSnapshot(
+    pipelineId: string,
+    moduleId: string,
+    input: {
+      userId?: string | null;
+      summary?: string;
+      data?: Record<string, unknown> | null;
+    },
+  ): Promise<ModuleSnapshotResponse> {
+    await this.loadPipeline(pipelineId);
+    const userId = this.cleanOptional(input.userId);
+    if (userId && !await this.storeService.getUser(userId)) {
+      throw new BadRequestException(`User ${userId} was not found.`);
+    }
+    return {
+      moduleSnapshot: await this.storeService.saveModuleSnapshot({
+        userId,
+        pipelineId,
+        moduleId: moduleId.trim(),
+        summary: input.summary?.trim() || '',
+        data: input.data && typeof input.data === 'object' && !Array.isArray(input.data)
+          ? input.data
+          : null,
+      }),
+    };
+  }
+
+  async createSearchCollectionJob(
+    pipelineId: string,
+    input: {
+      userId?: string | null;
+      query?: string;
+      kind?: 'dataset' | 'knowledge' | 'both';
+      sources?: CollectionSourceId[];
+      taskSignals?: TaskSignal[];
+      modalitySignals?: ModalitySignal[];
+      mustInclude?: string[];
+      mustAvoid?: string[];
+      domainModuleId?: string;
+    },
+  ): Promise<{ collectionJob: CollectionJobStatusResponse; querySource: 'input' | 'domain-snapshot' | 'fallback' }> {
+    await this.loadPipeline(pipelineId);
+    const userId = this.cleanOptional(input.userId);
+    const domainModuleId = input.domainModuleId?.trim() || 'domain';
+    const domainSnapshot = await this.storeService.getModuleSnapshot({
+      pipelineId,
+      moduleId: domainModuleId,
+      userId: userId ?? undefined,
+    });
+
+    const queryFromInput = input.query?.trim();
+    const queryFromDomain = this.queryFromDomainSnapshot(domainSnapshot?.data ?? null);
+    const query = queryFromInput || queryFromDomain || `pipeline ${pipelineId} dataset discovery`;
+    const querySource = queryFromInput ? 'input' : queryFromDomain ? 'domain-snapshot' : 'fallback';
+
+    const requestedSources = Array.isArray(input.sources) && input.sources.length > 0
+      ? input.sources.filter((source): source is CollectionSourceId => collectionSources.includes(source))
+      : collectionSources;
+    if (requestedSources.length === 0) {
+      throw new BadRequestException('sources must include at least one valid source.');
+    }
+
+    const taskSignals = Array.isArray(input.taskSignals)
+      ? input.taskSignals.filter((item): item is TaskSignal => typeof item === 'string')
+      : this.taskSignalsFromDomainSnapshot(domainSnapshot?.data ?? null);
+    const modalitySignals = Array.isArray(input.modalitySignals)
+      ? input.modalitySignals.filter((item): item is ModalitySignal => typeof item === 'string')
+      : this.modalitySignalsFromDomainSnapshot(domainSnapshot?.data ?? null);
+
+    const collectionJob = await this.collectionService.createJob({
+      query,
+      kind: input.kind ?? 'both',
+      requestedSources,
+      taskSignals,
+      modalitySignals,
+      mustInclude: this.stringArray(input.mustInclude),
+      mustAvoid: this.stringArray(input.mustAvoid),
+    });
+    return { collectionJob, querySource };
+  }
+
   private async updateModules(
     pipelineId: string,
     moduleIds: string[],
@@ -392,5 +520,55 @@ export class PipelinesService {
     return Object.fromEntries(
       Object.entries(layout).filter(([moduleId]) => moduleIds.includes(moduleId)),
     );
+  }
+
+  private stringArray(value: unknown): string[] {
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      : [];
+  }
+
+  private queryFromDomainSnapshot(data: Record<string, unknown> | null): string | null {
+    if (!data) {
+      return null;
+    }
+    const parts = [
+      this.valueFromSnapshot(data, 'industry'),
+      this.valueFromSnapshot(data, 'subdomain'),
+      this.valueFromSnapshot(data, 'ml_task'),
+      this.valueFromSnapshot(data, 'target_event'),
+      this.valueFromSnapshot(data, 'data_modality'),
+      this.valueFromSnapshot(data, 'row_unit'),
+    ].filter((item): item is string => Boolean(item));
+    if (parts.length === 0) {
+      return null;
+    }
+    return parts.join(' ');
+  }
+
+  private taskSignalsFromDomainSnapshot(data: Record<string, unknown> | null): TaskSignal[] {
+    const mlTask = this.valueFromSnapshot(data, 'ml_task')?.toLowerCase() ?? '';
+    if (mlTask.includes('regression')) return ['regression'];
+    if (mlTask.includes('anomaly')) return ['anomaly-detection'];
+    if (mlTask.includes('forecast')) return ['time-series-forecasting'];
+    return mlTask ? ['classification'] : [];
+  }
+
+  private modalitySignalsFromDomainSnapshot(data: Record<string, unknown> | null): ModalitySignal[] {
+    const modality = this.valueFromSnapshot(data, 'data_modality')?.toLowerCase() ?? '';
+    if (modality.includes('text') || modality.includes('문서')) return ['text'];
+    if (modality.includes('time') || modality.includes('시계열')) return ['time-series'];
+    if (modality.includes('transaction') || modality.includes('거래')) return ['transaction'];
+    if (modality.includes('longitudinal') || modality.includes('장기')) return ['longitudinal'];
+    if (modality.includes('table') || modality.includes('테이블') || modality.includes('tabular')) return ['tabular'];
+    return modality ? ['document'] : [];
+  }
+
+  private valueFromSnapshot(data: Record<string, unknown> | null, key: string): string | null {
+    if (!data) {
+      return null;
+    }
+    const value = data[key];
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
   }
 }

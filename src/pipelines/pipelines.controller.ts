@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { PipelinesService } from './pipelines.service';
 
 @Controller()
@@ -151,5 +151,57 @@ export class PipelinesController {
     @Param('moduleId') moduleId: string,
   ) {
     return this.pipelinesService.removeModule(pipelineId, moduleId);
+  }
+
+  @Get('pipelines/:pipelineId/module-snapshots')
+  listModuleSnapshots(
+    @Param('pipelineId') pipelineId: string,
+    @Query('userId') userId?: string,
+  ) {
+    return this.pipelinesService.listModuleSnapshots(pipelineId, userId);
+  }
+
+  @Get('pipelines/:pipelineId/module-snapshots/:moduleId')
+  getModuleSnapshot(
+    @Param('pipelineId') pipelineId: string,
+    @Param('moduleId') moduleId: string,
+    @Query('userId') userId?: string,
+  ) {
+    return this.pipelinesService.getModuleSnapshot(pipelineId, moduleId, userId);
+  }
+
+  @Put('pipelines/:pipelineId/module-snapshots/:moduleId')
+  saveModuleSnapshot(
+    @Param('pipelineId') pipelineId: string,
+    @Param('moduleId') moduleId: string,
+    @Body() body: { userId?: string; summary?: string; data?: Record<string, unknown> | null },
+  ) {
+    return this.pipelinesService.saveModuleSnapshot(pipelineId, moduleId, body);
+  }
+
+  @Post('pipelines/:pipelineId/modules/search/collection-jobs')
+  createSearchCollectionJob(
+    @Param('pipelineId') pipelineId: string,
+    @Body()
+    body: {
+      userId?: string;
+      query?: string;
+      kind?: 'dataset' | 'knowledge' | 'both';
+      sources?: Array<'seed-catalog' | 'huggingface' | 'openml' | 'uci' | 'kaggle' | 'serpapi' | 'crossref'>;
+      taskSignals?: Array<
+        | 'classification'
+        | 'regression'
+        | 'anomaly-detection'
+        | 'time-series-forecasting'
+        | 'content-authenticity'
+        | 'authorship-attribution'
+      >;
+      modalitySignals?: Array<'tabular' | 'text' | 'time-series' | 'transaction' | 'longitudinal' | 'document'>;
+      mustInclude?: string[];
+      mustAvoid?: string[];
+      domainModuleId?: string;
+    },
+  ) {
+    return this.pipelinesService.createSearchCollectionJob(pipelineId, body);
   }
 }

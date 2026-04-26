@@ -29,13 +29,22 @@ import { CollectionWebRoutingService } from './collection/collection-web-routing
 import { OrchestratorController } from './orchestrator/orchestrator.controller';
 import { OrchestratorModuleRegistryService } from './orchestrator/orchestrator-module-registry.service';
 import { OrchestratorService } from './orchestrator/orchestrator.service';
+import { ModulesCatalogController } from './modules-catalog/modules-catalog.controller';
+import { ModulesCatalogService } from './modules-catalog/modules-catalog.service';
 import { PipelinesController } from './pipelines/pipelines.controller';
 import { PipelinesService } from './pipelines/pipelines.service';
 import { StoreModule } from './store/store.module';
 
 @Module({
   imports: [StoreModule, DatabaseModule, AuthModule],
-  controllers: [AppController, CollectionController, OrchestratorController, PipelinesController, DataSourcesController],
+  controllers: [
+    AppController,
+    CollectionController,
+    OrchestratorController,
+    PipelinesController,
+    DataSourcesController,
+    ModulesCatalogController,
+  ],
   providers: [
     SeedCatalogConnector,
     HuggingFaceDatasetsConnector,
@@ -62,6 +71,7 @@ import { StoreModule } from './store/store.module';
     OrchestratorService,
     PipelinesService,
     DataSourcesService,
+    ModulesCatalogService,
   ],
 })
 export class AppModule {}

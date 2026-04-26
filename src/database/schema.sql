@@ -76,6 +76,8 @@ create table if not exists module_snapshots (
   unique(user_id, pipeline_id, module_id)
 );
 
+alter table module_snapshots alter column user_id drop not null;
+
 create table if not exists orchestrator_jobs (
   id text primary key,
   user_id text references users(id) on delete set null,
