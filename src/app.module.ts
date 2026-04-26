@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
+import { AuthModule } from './auth/auth.module';
 import { CollectionController } from './collection/collection.controller';
 import { CollectionConnectorRegistryService } from './collection/connectors/connector-registry.service';
 import { CrossrefKnowledgeConnector } from './collection/connectors/crossref-knowledge.connector';
@@ -22,12 +23,12 @@ import { CollectionService } from './collection/collection.service';
 import { CollectionOrderingService } from './collection/collection-ordering.service';
 import { CollectionSerpResultFilterService } from './collection/collection-serp-result-filter.service';
 import { CollectionWebRoutingService } from './collection/collection-web-routing.service';
-import { StoreService } from './store/store.service';
+import { StoreModule } from './store/store.module';
 
 @Module({
+  imports: [StoreModule, AuthModule],
   controllers: [AppController, CollectionController],
   providers: [
-    StoreService,
     SeedCatalogConnector,
     HuggingFaceDatasetsConnector,
     UciDatasetsConnector,

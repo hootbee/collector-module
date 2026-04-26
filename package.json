@@ -9,6 +9,7 @@
     "start:watch": "node --watch --require ts-node/register src/main.ts",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
+    "auth:smoke": "ts-node src/scripts/auth-smoke.ts",
     "collection:smoke": "ts-node src/scripts/collection-smoke.ts",
     "collection:browser:smoke": "ts-node src/scripts/collection-browser-fallback-smoke.ts",
     "collection:download:smoke": "ts-node src/scripts/collection-download-smoke.ts"

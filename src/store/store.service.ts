@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type {
+  AuthProvider,
   CollectionConnectorStatus,
   CollectionDownloadItemResult,
   CollectionDownloadJobRecord,
@@ -12,6 +13,9 @@ import type {
   CollectionKind,
   CollectionLlmPlan,
   CollectionSourceId,
+  OAuthAccountRecord,
+  RefreshTokenRecord,
+  UserRecord,
 } from '../common/contracts';
 import { nowIso } from '../common/time';
 
@@ -19,6 +23,115 @@ import { nowIso } from '../common/time';
 export class StoreService {
   private readonly collectionJobs = new Map<string, CollectionJobRecord>();
   private readonly collectionDownloadJobs = new Map<string, CollectionDownloadJobRecord>();
+  private readonly users = new Map<string, UserRecord>();
+  private readonly oauthAccounts = new Map<string, OAuthAccountRecord>();
+  private readonly refreshTokens = new Map<string, RefreshTokenRecord>();
+
+  upsertOAuthUser(input: {
+    provider: AuthProvider;
+    providerUserId: string;
+    email: string;
+    name: string;
+    avatarUrl?: string;
+  }): UserRecord {
+    const now = nowIso();
+    const accountKey = this.oauthAccountKey(input.provider, input.providerUserId);
+    const existingAccount = this.oauthAccounts.get(accountKey);
+    if (existingAccount) {
+      const user = this.users.get(existingAccount.userId);
+      if (user) {
+        const updated: UserRecord = {
+          ...user,
+          email: input.email,
+          name: input.name,
+          avatarUrl: input.avatarUrl,
+          updatedAt: now,
+        };
+        this.users.set(updated.id, updated);
+        this.oauthAccounts.set(accountKey, {
+          ...existingAccount,
+          email: input.email,
+          updatedAt: now,
+        });
+        return updated;
+      }
+    }
+
+    const existingUser = this.findUserByEmail(input.email);
+    const user: UserRecord = existingUser
+      ? {
+          ...existingUser,
+          name: input.name || existingUser.name,
+          avatarUrl: input.avatarUrl || existingUser.avatarUrl,
+          updatedAt: now,
+        }
+      : {
+          id: `user-${randomUUID().replace(/-/g, '').slice(0, 12)}`,
+          email: input.email,
+          name: input.name || input.email,
+          avatarUrl: input.avatarUrl,
+          role: 'user',
+          createdAt: now,
+          updatedAt: now,
+        };
+
+    this.users.set(user.id, user);
+    this.oauthAccounts.set(accountKey, {
+      id: `oauth-${randomUUID().replace(/-/g, '').slice(0, 12)}`,
+      userId: user.id,
+      provider: input.provider,
+      providerUserId: input.providerUserId,
+      email: input.email,
+      createdAt: now,
+      updatedAt: now,
+    });
+    return user;
+  }
+
+  getUser(userId: string): UserRecord | undefined {
+    return this.users.get(userId);
+  }
+
+  createRefreshToken(input: {
+    userId: string;
+    tokenHash: string;
+    expiresAt: string;
+  }): RefreshTokenRecord {
+    const record: RefreshTokenRecord = {
+      id: `refresh-${randomUUID().replace(/-/g, '').slice(0, 12)}`,
+      userId: input.userId,
+      tokenHash: input.tokenHash,
+      expiresAt: input.expiresAt,
+      revokedAt: null,
+      createdAt: nowIso(),
+    };
+    this.refreshTokens.set(record.tokenHash, record);
+    return record;
+  }
+
+  getRefreshTokenByHash(tokenHash: string): RefreshTokenRecord | undefined {
+    return this.refreshTokens.get(tokenHash);
+  }
+
+  revokeRefreshToken(tokenHash: string): void {
+    const record = this.refreshTokens.get(tokenHash);
+    if (!record || record.revokedAt) {
+      return;
+    }
+    this.refreshTokens.set(tokenHash, {
+      ...record,
+      revokedAt: nowIso(),
+    });
+  }
+
+  private findUserByEmail(email: string): UserRecord | undefined {
+    const normalized = email.trim().toLowerCase();
+    return [...this.users.values()].find((user) => user.email.toLowerCase() === normalized);
+  }
+
+  private oauthAccountKey(provider: AuthProvider, providerUserId: string): string {
+    return `${provider}:${providerUserId}`;
+  }
 
   createCollectionJob(input: {
     query: string;

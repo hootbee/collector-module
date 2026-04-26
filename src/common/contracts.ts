@@ -523,6 +523,52 @@ export type CollectionDownloadJobRecord = {
   itemResults: CollectionDownloadItemResult[];
 };
 
+export type AuthProvider = 'google';
+
+export type UserRecord = {
+  id: string;
+  email: string;
+  name: string;
+  avatarUrl?: string;
+  role: 'user' | 'admin';
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type OAuthAccountRecord = {
+  id: string;
+  userId: string;
+  provider: AuthProvider;
+  providerUserId: string;
+  email: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RefreshTokenRecord = {
+  id: string;
+  userId: string;
+  tokenHash: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  createdAt: string;
+};
+
+export type AuthUserResponse = {
+  id: string;
+  email: string;
+  name: string;
+  avatarUrl?: string;
+  role: UserRecord['role'];
+};
+
+export type AuthLoginResponse = {
+  user: AuthUserResponse;
+  accessToken: string;
+  tokenType: 'Bearer';
+  expiresIn: number;
+};
+
 export type CreateDatasetInput = {
   sessionId: string;
   fileName: string;

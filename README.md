@@ -1,10 +1,12 @@
 # Backend
 
-이 백엔드는 **collection 전용 수집 서버**입니다.  
-사용자가 검색 의도(`query`)를 넘기면 외부 source에서 dataset/knowledge 후보를 수집하고, raw hit와 정규화된 메타데이터를 함께 저장합니다.
+이 백엔드는 **모듈형 모놀리스 API의 초기 서버**입니다.  
+현재는 auth와 collection 모듈을 포함하며, collection은 추후 worker 컨테이너로 분리할 수 있는 수집 모듈입니다.
 
 현재 범위:
 
+- Google OAuth 기반 auth API
+- JWT access token + HttpOnly refresh cookie
 - collection job 생성
 - 외부 source 수집
 - raw/normalized 결과 저장
@@ -62,12 +64,78 @@ COLLECTION_BROWSER_FALLBACK_ENABLED=true npm run collection:browser:smoke
 ## API
 
 - `GET /api/v1/health`
+- `POST /api/v1/auth/google`
+- `POST /api/v1/auth/refresh`
+- `POST /api/v1/auth/logout`
+- `GET /api/v1/auth/me`
 - `POST /api/v1/collection/jobs`
 - `GET /api/v1/collection/jobs/:jobId`
 - `GET /api/v1/collection/jobs/:jobId/results`
 - `POST /api/v1/collection/jobs/:jobId/downloads`
 - `GET /api/v1/collection/downloads/:downloadJobId`
 - `GET /api/v1/collection/downloads/:downloadJobId/results`
+
+## Auth
+
+초기 auth는 API 내부 모듈로 구현되어 있습니다.
+
+- Google Social Login
+- access token: Bearer JWT
+- refresh token: HttpOnly cookie
+- 현재 저장소: in-memory `StoreService`
+- 추후 MySQL 전환 시 `users`, `oauth_accounts`, `refresh_tokens` 테이블로 이전
+
+환경변수:
+
+```bash
+AUTH_JWT_SECRET=change-me-to-a-long-random-secret-value
+AUTH_REFRESH_TOKEN_SECRET=change-me-to-a-long-random-refresh-secret
+AUTH_ACCESS_TOKEN_TTL_SECONDS=900
+AUTH_REFRESH_TOKEN_TTL_SECONDS=1209600
+AUTH_COOKIE_SECURE=false
+AUTH_COOKIE_SAME_SITE=lax
+GOOGLE_CLIENT_ID=
+```
+
+Google 로그인:
+
+```http
+POST /api/v1/auth/google
+Content-Type: application/json
+
+{
+  "idToken": "google-id-token"
+}
+```
+
+응답:
+
+```json
+{
+  "user": {
+    "id": "user-...",
+    "email": "user@example.com",
+    "name": "User",
+    "role": "user"
+  },
+  "accessToken": "...",
+  "tokenType": "Bearer",
+  "expiresIn": 900
+}
+```
+
+현재 사용자:
+
+```http
+GET /api/v1/auth/me
+Authorization: Bearer <accessToken>
+```
+
+로컬 smoke:
+
+```bash
+npm run auth:smoke
+```
 
 ## Collection 요청 형식
 
