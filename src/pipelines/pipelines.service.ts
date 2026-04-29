@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type {
   CollectionJobStatusResponse,
   CollectionSourceId,
@@ -70,19 +70,21 @@ export class PipelinesService {
   }
 
   async listPipelines(userId?: string | null): Promise<{ pipelines: PipelineRecord[] }> {
+    if (!userId) {
+      return { pipelines: [] };
+    }
     return {
       pipelines: await this.storeService.listPipelines(userId),
     };
   }
 
-  async getPipeline(pipelineId: string): Promise<PipelineResponse> {
+  async getPipeline(pipelineId: string, actorUserId?: string | null): Promise<PipelineResponse> {
     return {
-      pipeline: await this.loadPipeline(pipelineId),
+      pipeline: await this.loadPipeline(pipelineId, actorUserId),
     };
   }
 
-  async createPipeline(input: {
-    userId?: string | null;
+  async createPipeline(actorUserId: string, input: {
     kind?: string;
     domainKey?: string | null;
     domainLabel?: string | null;
@@ -98,9 +100,8 @@ export class PipelinesService {
     if (!title) {
       throw new BadRequestException('title is required.');
     }
-    const userId = this.cleanOptional(input.userId);
-    if (userId && !await this.storeService.getUser(userId)) {
-      throw new BadRequestException(`User ${userId} was not found.`);
+    if (!await this.storeService.getUser(actorUserId)) {
+      throw new BadRequestException(`User ${actorUserId} was not found.`);
     }
     const moduleIds = this.cleanModuleIds(input.moduleIds);
     const connectedAfter = this.normalizeConnectedAfter(
@@ -108,7 +109,7 @@ export class PipelinesService {
       this.cleanModuleIds(input.connectedAfter),
     );
     const pipeline = await this.storeService.createPipeline({
-      userId,
+      userId: actorUserId,
       kind: input.kind?.trim() || 'custom',
       domainKey: this.cleanOptional(input.domainKey),
       domainLabel: this.cleanOptional(input.domainLabel),
@@ -125,8 +126,8 @@ export class PipelinesService {
 
   async updatePipeline(
     pipelineId: string,
+    actorUserId: string,
     input: {
-      userId?: string | null;
       kind?: string;
       domainKey?: string | null;
       domainLabel?: string | null;
@@ -136,15 +137,9 @@ export class PipelinesService {
       autoNamed?: boolean;
     },
   ): Promise<PipelineResponse> {
-    await this.loadPipeline(pipelineId);
+    await this.loadPipeline(pipelineId, actorUserId);
     const patch: Partial<PipelineRecord> = {};
-    if (input.userId !== undefined) {
-      const userId = this.cleanOptional(input.userId);
-      if (userId && !await this.storeService.getUser(userId)) {
-        throw new BadRequestException(`User ${userId} was not found.`);
-      }
-      patch.userId = userId;
-    }
+    patch.userId = actorUserId;
     if (input.kind !== undefined) patch.kind = input.kind?.trim() || 'custom';
     if (input.domainKey !== undefined) patch.domainKey = this.cleanOptional(input.domainKey);
     if (input.domainLabel !== undefined) patch.domainLabel = this.cleanOptional(input.domainLabel);
@@ -165,17 +160,12 @@ export class PipelinesService {
     return { pipeline };
   }
 
-  async duplicatePipeline(pipelineId: string, input?: {
-    userId?: string | null;
+  async duplicatePipeline(pipelineId: string, actorUserId: string, input?: {
     title?: string;
   }): Promise<PipelineResponse> {
-    const source = await this.loadPipeline(pipelineId);
-    const userId = input?.userId !== undefined ? this.cleanOptional(input.userId) : source.userId;
-    if (userId && !await this.storeService.getUser(userId)) {
-      throw new BadRequestException(`User ${userId} was not found.`);
-    }
+    const source = await this.loadPipeline(pipelineId, actorUserId);
     const pipeline = await this.storeService.createPipeline({
-      userId,
+      userId: actorUserId,
       kind: source.kind,
       domainKey: source.domainKey,
       domainLabel: source.domainLabel,
@@ -190,7 +180,8 @@ export class PipelinesService {
     return { pipeline };
   }
 
-  async deletePipeline(pipelineId: string): Promise<{ status: 'ok' }> {
+  async deletePipeline(pipelineId: string, actorUserId: string): Promise<{ status: 'ok' }> {
+    await this.loadPipeline(pipelineId, actorUserId);
     const deleted = await this.storeService.deletePipeline(pipelineId);
     if (!deleted) {
       throw new NotFoundException(`Pipeline ${pipelineId} was not found.`);
@@ -199,6 +190,7 @@ export class PipelinesService {
   }
 
   async addModule(pipelineId: string, input: {
+    actorUserId: string;
     moduleId?: string;
     afterModuleId?: string | null;
     layout?: Record<string, unknown>;
@@ -207,7 +199,7 @@ export class PipelinesService {
     if (!moduleId) {
       throw new BadRequestException('moduleId is required.');
     }
-    const pipeline = await this.loadPipeline(pipelineId);
+    const pipeline = await this.loadPipeline(pipelineId, input.actorUserId);
     const moduleIds = pipeline.moduleIds.includes(moduleId)
       ? [...pipeline.moduleIds]
       : [...pipeline.moduleIds, moduleId];
@@ -219,12 +211,12 @@ export class PipelinesService {
     return this.updateModules(pipeline.id, moduleIds, connectedAfter, moduleLayout);
   }
 
-  async removeModule(pipelineId: string, moduleId: string): Promise<PipelineResponse> {
+  async removeModule(pipelineId: string, actorUserId: string, moduleId: string): Promise<PipelineResponse> {
     const targetModuleId = moduleId.trim();
     if (!targetModuleId) {
       throw new BadRequestException('moduleId is required.');
     }
-    const pipeline = await this.loadPipeline(pipelineId);
+    const pipeline = await this.loadPipeline(pipelineId, actorUserId);
     const moduleIds = pipeline.moduleIds.filter((id) => id !== targetModuleId);
     const connectedAfter = pipeline.connectedAfter.filter((id) => id !== targetModuleId);
     const moduleLayout = Object.fromEntries(
@@ -233,12 +225,16 @@ export class PipelinesService {
     return this.updateModules(pipeline.id, moduleIds, connectedAfter, moduleLayout);
   }
 
-  async reorderModules(pipelineId: string, input: { moduleIds?: string[] }): Promise<PipelineResponse> {
+  async reorderModules(
+    pipelineId: string,
+    actorUserId: string,
+    input: { moduleIds?: string[] },
+  ): Promise<PipelineResponse> {
     const requested = this.cleanModuleIds(input.moduleIds);
     if (requested.length === 0) {
       throw new BadRequestException('moduleIds is required.');
     }
-    const pipeline = await this.loadPipeline(pipelineId);
+    const pipeline = await this.loadPipeline(pipelineId, actorUserId);
     const sameSet =
       requested.length === pipeline.moduleIds.length &&
       requested.every((id) => pipeline.moduleIds.includes(id));
@@ -252,6 +248,7 @@ export class PipelinesService {
 
   async updateModulePosition(
     pipelineId: string,
+    actorUserId: string,
     moduleId: string,
     input: { position?: { x?: number; y?: number } },
   ): Promise<PipelineResponse> {
@@ -264,7 +261,7 @@ export class PipelinesService {
     if (typeof x !== 'number' || typeof y !== 'number') {
       throw new BadRequestException('position.x and position.y are required numbers.');
     }
-    const pipeline = await this.loadPipeline(pipelineId);
+    const pipeline = await this.loadPipeline(pipelineId, actorUserId);
     if (!pipeline.moduleIds.includes(targetModuleId)) {
       throw new BadRequestException(`moduleId ${targetModuleId} is not in the pipeline.`);
     }
@@ -276,9 +273,10 @@ export class PipelinesService {
 
   async updateConnections(
     pipelineId: string,
+    actorUserId: string,
     input: { connectedAfter?: string[] },
   ): Promise<PipelineResponse> {
-    const pipeline = await this.loadPipeline(pipelineId);
+    const pipeline = await this.loadPipeline(pipelineId, actorUserId);
     const connectedAfter = this.normalizeConnectedAfter(
       pipeline.moduleIds,
       this.cleanModuleIds(input.connectedAfter),
@@ -288,13 +286,14 @@ export class PipelinesService {
 
   async connectAfter(
     pipelineId: string,
+    actorUserId: string,
     moduleId: string,
   ): Promise<PipelineResponse> {
     const targetModuleId = moduleId.trim();
     if (!targetModuleId) {
       throw new BadRequestException('moduleId is required.');
     }
-    const pipeline = await this.loadPipeline(pipelineId);
+    const pipeline = await this.loadPipeline(pipelineId, actorUserId);
     if (!pipeline.moduleIds.includes(targetModuleId)) {
       throw new BadRequestException(`moduleId ${targetModuleId} is not in the pipeline.`);
     }
@@ -307,23 +306,27 @@ export class PipelinesService {
 
   async disconnectAfter(
     pipelineId: string,
+    actorUserId: string,
     moduleId: string,
   ): Promise<PipelineResponse> {
     const targetModuleId = moduleId.trim();
     if (!targetModuleId) {
       throw new BadRequestException('moduleId is required.');
     }
-    const pipeline = await this.loadPipeline(pipelineId);
+    const pipeline = await this.loadPipeline(pipelineId, actorUserId);
     const connectedAfter = pipeline.connectedAfter.filter((id) => id !== targetModuleId);
     return this.updateModules(pipeline.id, pipeline.moduleIds, connectedAfter, pipeline.moduleLayout);
   }
 
   async listModuleSnapshots(pipelineId: string, userId?: string | null): Promise<ModuleSnapshotListResponse> {
-    await this.loadPipeline(pipelineId);
+    if (!userId) {
+      return { moduleSnapshots: [] };
+    }
+    await this.loadPipeline(pipelineId, userId);
     return {
       moduleSnapshots: await this.storeService.listModuleSnapshots({
         pipelineId,
-        userId: userId === undefined ? undefined : this.cleanOptional(userId),
+        userId: this.cleanOptional(userId),
       }),
     };
   }
@@ -333,11 +336,14 @@ export class PipelinesService {
     moduleId: string,
     userId?: string | null,
   ): Promise<ModuleSnapshotResponse> {
-    await this.loadPipeline(pipelineId);
+    if (!userId) {
+      throw new ForbiddenException('You do not have access to this module snapshot.');
+    }
+    await this.loadPipeline(pipelineId, userId);
     const moduleSnapshot = await this.storeService.getModuleSnapshot({
       pipelineId,
       moduleId: moduleId.trim(),
-      userId: userId === undefined ? undefined : this.cleanOptional(userId),
+      userId: this.cleanOptional(userId),
     });
     if (!moduleSnapshot) {
       throw new NotFoundException(`Module snapshot was not found for moduleId=${moduleId}.`);
@@ -348,20 +354,19 @@ export class PipelinesService {
   async saveModuleSnapshot(
     pipelineId: string,
     moduleId: string,
+    actorUserId: string,
     input: {
-      userId?: string | null;
       summary?: string;
       data?: Record<string, unknown> | null;
     },
   ): Promise<ModuleSnapshotResponse> {
-    await this.loadPipeline(pipelineId);
-    const userId = this.cleanOptional(input.userId);
-    if (userId && !await this.storeService.getUser(userId)) {
-      throw new BadRequestException(`User ${userId} was not found.`);
+    await this.loadPipeline(pipelineId, actorUserId);
+    if (!await this.storeService.getUser(actorUserId)) {
+      throw new BadRequestException(`User ${actorUserId} was not found.`);
     }
     return {
       moduleSnapshot: await this.storeService.saveModuleSnapshot({
-        userId,
+        userId: actorUserId,
         pipelineId,
         moduleId: moduleId.trim(),
         summary: input.summary?.trim() || '',
@@ -374,8 +379,8 @@ export class PipelinesService {
 
   async createSearchCollectionJob(
     pipelineId: string,
+    actorUserId: string,
     input: {
-      userId?: string | null;
       query?: string;
       kind?: 'dataset' | 'knowledge' | 'both';
       sources?: CollectionSourceId[];
@@ -386,8 +391,8 @@ export class PipelinesService {
       domainModuleId?: string;
     },
   ): Promise<{ collectionJob: CollectionJobStatusResponse; querySource: 'input' | 'domain-snapshot' | 'fallback' }> {
-    await this.loadPipeline(pipelineId);
-    const userId = this.cleanOptional(input.userId);
+    await this.loadPipeline(pipelineId, actorUserId);
+    const userId = actorUserId;
     const domainModuleId = input.domainModuleId?.trim() || 'domain';
     const domainSnapshot = await this.storeService.getModuleSnapshot({
       pipelineId,
@@ -455,10 +460,13 @@ export class PipelinesService {
     return this.normalizeConnectedAfter(moduleIds, [...current, after]);
   }
 
-  private async loadPipeline(pipelineId: string): Promise<PipelineRecord> {
+  private async loadPipeline(pipelineId: string, actorUserId?: string | null): Promise<PipelineRecord> {
     const pipeline = await this.storeService.getPipeline(pipelineId);
     if (!pipeline) {
       throw new NotFoundException(`Pipeline ${pipelineId} was not found.`);
+    }
+    if (!actorUserId || pipeline.userId !== actorUserId) {
+      throw new ForbiddenException('You do not have access to this pipeline.');
     }
     return pipeline;
   }

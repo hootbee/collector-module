@@ -1,43 +1,58 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { AuthService } from '../auth/auth.service';
+import { requireUserId, resolveOptionalUserId, type MinimalRequest } from '../auth/auth-request';
 import { DataSourcesService } from './data-sources.service';
 
 @Controller('data-sources')
 export class DataSourcesController {
-  constructor(private readonly dataSourcesService: DataSourcesService) {}
+  constructor(
+    private readonly dataSourcesService: DataSourcesService,
+    private readonly authService: AuthService,
+  ) {}
 
   @Get()
-  list(@Query('userId') userId?: string) {
+  async list(@Req() request: MinimalRequest) {
+    const userId = await resolveOptionalUserId(this.authService, request);
     return this.dataSourcesService.list(userId);
   }
 
   @Post()
-  create(@Body() body: Record<string, unknown>) {
-    return this.dataSourcesService.create(body);
+  async create(
+    @Req() request: MinimalRequest,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.dataSourcesService.create(await requireUserId(this.authService, request), body);
   }
 
   @Get(':dataSourceId')
-  get(@Param('dataSourceId') dataSourceId: string) {
-    return this.dataSourcesService.get(dataSourceId);
+  async get(@Req() request: MinimalRequest, @Param('dataSourceId') dataSourceId: string) {
+    return this.dataSourcesService.get(dataSourceId, await resolveOptionalUserId(this.authService, request));
   }
 
   @Patch(':dataSourceId')
-  update(
+  async update(
+    @Req() request: MinimalRequest,
     @Param('dataSourceId') dataSourceId: string,
     @Body() body: Record<string, unknown>,
   ) {
-    return this.dataSourcesService.update(dataSourceId, body);
+    return this.dataSourcesService.update(dataSourceId, await requireUserId(this.authService, request), body);
   }
 
   @Patch(':dataSourceId/linked-pipeline')
-  updateLinkedPipeline(
+  async updateLinkedPipeline(
+    @Req() request: MinimalRequest,
     @Param('dataSourceId') dataSourceId: string,
     @Body() body: { linkedPipelineId?: string | null },
   ) {
-    return this.dataSourcesService.updateLinkedPipeline(dataSourceId, body.linkedPipelineId);
+    return this.dataSourcesService.updateLinkedPipeline(
+      dataSourceId,
+      await requireUserId(this.authService, request),
+      body.linkedPipelineId,
+    );
   }
 
   @Delete(':dataSourceId')
-  delete(@Param('dataSourceId') dataSourceId: string) {
-    return this.dataSourcesService.delete(dataSourceId);
+  async delete(@Req() request: MinimalRequest, @Param('dataSourceId') dataSourceId: string) {
+    return this.dataSourcesService.delete(dataSourceId, await requireUserId(this.authService, request));
   }
 }

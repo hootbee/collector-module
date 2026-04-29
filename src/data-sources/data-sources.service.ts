@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { DataSourceListResponse, DataSourceRecord, DataSourceResponse } from '../common/contracts';
 import { StoreService } from '../store/store.service';
 
@@ -22,31 +22,33 @@ export class DataSourcesService {
   constructor(private readonly storeService: StoreService) {}
 
   async list(userId?: string | null): Promise<DataSourceListResponse> {
+    if (!userId) {
+      return { dataSources: [] };
+    }
     return {
       dataSources: await this.storeService.listDataSources(this.cleanOptional(userId)),
     };
   }
 
-  async get(dataSourceId: string): Promise<DataSourceResponse> {
+  async get(dataSourceId: string, actorUserId?: string | null): Promise<DataSourceResponse> {
     return {
-      dataSource: await this.load(dataSourceId),
+      dataSource: await this.load(dataSourceId, actorUserId),
     };
   }
 
-  async create(input: DataSourceInput): Promise<DataSourceResponse> {
+  async create(actorUserId: string, input: DataSourceInput): Promise<DataSourceResponse> {
     const name = input.name?.trim();
     if (!name) {
       throw new BadRequestException('name is required.');
     }
-    const userId = this.cleanOptional(input.userId);
-    if (userId && !await this.storeService.getUser(userId)) {
-      throw new BadRequestException(`User ${userId} was not found.`);
+    if (!await this.storeService.getUser(actorUserId)) {
+      throw new BadRequestException(`User ${actorUserId} was not found.`);
     }
     const linkedPipelineId = this.cleanOptional(input.linkedPipelineId);
     await this.assertPipelineExists(linkedPipelineId);
 
     const dataSource = await this.storeService.createDataSource({
-      userId,
+      userId: actorUserId,
       name,
       source: this.cleanOptional(input.source) ?? '미지정',
       rowsLabel: this.cleanOptional(input.rowsLabel),
@@ -62,16 +64,10 @@ export class DataSourcesService {
     return { dataSource };
   }
 
-  async update(dataSourceId: string, input: DataSourceInput): Promise<DataSourceResponse> {
-    await this.load(dataSourceId);
+  async update(dataSourceId: string, actorUserId: string, input: DataSourceInput): Promise<DataSourceResponse> {
+    await this.load(dataSourceId, actorUserId);
     const patch: Partial<DataSourceRecord> = {};
-    if (input.userId !== undefined) {
-      const userId = this.cleanOptional(input.userId);
-      if (userId && !await this.storeService.getUser(userId)) {
-        throw new BadRequestException(`User ${userId} was not found.`);
-      }
-      patch.userId = userId;
-    }
+    patch.userId = actorUserId;
     if (input.name !== undefined) {
       const name = input.name?.trim();
       if (!name) {
@@ -101,10 +97,16 @@ export class DataSourcesService {
     return { dataSource };
   }
 
-  async updateLinkedPipeline(dataSourceId: string, linkedPipelineId?: string | null): Promise<DataSourceResponse> {
+  async updateLinkedPipeline(
+    dataSourceId: string,
+    actorUserId: string,
+    linkedPipelineId?: string | null,
+  ): Promise<DataSourceResponse> {
+    await this.load(dataSourceId, actorUserId);
     const cleanPipelineId = this.cleanOptional(linkedPipelineId);
     await this.assertPipelineExists(cleanPipelineId);
     const dataSource = await this.storeService.updateDataSource(dataSourceId, {
+      userId: actorUserId,
       linkedPipelineId: cleanPipelineId,
     });
     if (!dataSource) {
@@ -113,7 +115,8 @@ export class DataSourcesService {
     return { dataSource };
   }
 
-  async delete(dataSourceId: string): Promise<{ status: 'ok' }> {
+  async delete(dataSourceId: string, actorUserId: string): Promise<{ status: 'ok' }> {
+    await this.load(dataSourceId, actorUserId);
     const deleted = await this.storeService.deleteDataSource(dataSourceId);
     if (!deleted) {
       throw new NotFoundException(`Data source ${dataSourceId} was not found.`);
@@ -121,10 +124,13 @@ export class DataSourcesService {
     return { status: 'ok' };
   }
 
-  private async load(dataSourceId: string): Promise<DataSourceRecord> {
+  private async load(dataSourceId: string, actorUserId?: string | null): Promise<DataSourceRecord> {
     const dataSource = await this.storeService.getDataSource(dataSourceId);
     if (!dataSource) {
       throw new NotFoundException(`Data source ${dataSourceId} was not found.`);
+    }
+    if (!actorUserId || dataSource.userId !== actorUserId) {
+      throw new ForbiddenException('You do not have access to this data source.');
     }
     return dataSource;
   }

@@ -8,15 +8,40 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function loginAsSmokeUser(baseUrl: string): Promise<{ accessToken: string }> {
+  const loginId = 'smoke-user';
+  const password = 'password1234';
+  const name = 'Smoke User';
+  try {
+    await requestJson(`${baseUrl}/api/v1/auth/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, loginId, password }),
+    });
+  } catch {
+    // already exists
+  }
+  return requestJson(`${baseUrl}/api/v1/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ loginId, password }),
+  });
+}
+
 async function main() {
   const app = await createApp();
   await app.listen(0, '127.0.0.1');
   const baseUrl = await app.getUrl();
 
   try {
+    const auth = await loginAsSmokeUser(baseUrl);
+    const authHeaders = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${auth.accessToken}`,
+    };
     const created = await requestJson<{ pipeline: { id: string } }>(`${baseUrl}/api/v1/pipelines`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders,
       body: JSON.stringify({
         kind: 'manual',
         domainKey: 'medical',
@@ -37,7 +62,7 @@ async function main() {
       `${baseUrl}/api/v1/pipelines/${created.pipeline.id}`,
       {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({
           title: 'Pipeline CRUD smoke updated',
           description: 'metadata patch check',
@@ -50,7 +75,7 @@ async function main() {
       `${baseUrl}/api/v1/pipelines/${created.pipeline.id}/modules/reorder`,
       {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({
           moduleIds: ['domain', 'diagnosis', 'search'],
         }),
@@ -61,7 +86,7 @@ async function main() {
       `${baseUrl}/api/v1/pipelines/${created.pipeline.id}/modules/diagnosis/position`,
       {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({ position: { x: 420, y: 220 } }),
       },
     );
@@ -70,7 +95,7 @@ async function main() {
       `${baseUrl}/api/v1/pipelines/${created.pipeline.id}/connections`,
       {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({ connectedAfter: ['domain'] }),
       },
     );
@@ -79,6 +104,7 @@ async function main() {
       `${baseUrl}/api/v1/pipelines/${created.pipeline.id}/connections/diagnosis/connect`,
       {
         method: 'POST',
+        headers: { Authorization: `Bearer ${auth.accessToken}` },
       },
     );
 
@@ -86,6 +112,7 @@ async function main() {
       `${baseUrl}/api/v1/pipelines/${created.pipeline.id}/connections/diagnosis`,
       {
         method: 'DELETE',
+        headers: { Authorization: `Bearer ${auth.accessToken}` },
       },
     );
 
@@ -93,7 +120,7 @@ async function main() {
       `${baseUrl}/api/v1/pipelines/${created.pipeline.id}/duplicate`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({ title: 'Pipeline CRUD smoke duplicated' }),
       },
     );
@@ -102,10 +129,13 @@ async function main() {
       `${baseUrl}/api/v1/pipelines/${created.pipeline.id}`,
       {
         method: 'DELETE',
+        headers: { Authorization: `Bearer ${auth.accessToken}` },
       },
     );
 
-    const list = await requestJson(`${baseUrl}/api/v1/pipelines`);
+    const list = await requestJson(`${baseUrl}/api/v1/pipelines`, {
+      headers: { Authorization: `Bearer ${auth.accessToken}` },
+    });
 
     console.log(JSON.stringify({
       status: 'ok',

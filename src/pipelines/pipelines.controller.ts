@@ -1,9 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Req } from '@nestjs/common';
+import { AuthService } from '../auth/auth.service';
+import { requireUserId, resolveOptionalUserId, type MinimalRequest } from '../auth/auth-request';
 import { PipelinesService } from './pipelines.service';
 
 @Controller()
 export class PipelinesController {
-  constructor(private readonly pipelinesService: PipelinesService) {}
+  constructor(
+    private readonly pipelinesService: PipelinesService,
+    private readonly authService: AuthService,
+  ) {}
 
   @Get('pipeline-templates')
   listSharedTemplates() {
@@ -16,26 +21,28 @@ export class PipelinesController {
   }
 
   @Post('pipeline-templates/:templateId/copy')
-  copySharedTemplate(
+  async copySharedTemplate(
+    @Req() request: MinimalRequest,
     @Param('templateId') templateId: string,
-    @Body() body: { userId?: string; title?: string },
+    @Body() body: { title?: string },
   ) {
+    const userId = await requireUserId(this.authService, request);
     return this.pipelinesService.copySharedTemplate(templateId, {
-      userId: body.userId,
+      userId,
       title: body.title,
     });
   }
 
   @Get('pipelines')
-  listPipelines(@Query('userId') userId?: string) {
-    return this.pipelinesService.listPipelines(userId?.trim() || null);
+  async listPipelines(@Req() request: MinimalRequest) {
+    return this.pipelinesService.listPipelines(await resolveOptionalUserId(this.authService, request));
   }
 
   @Post('pipelines')
-  createPipeline(
+  async createPipeline(
+    @Req() request: MinimalRequest,
     @Body()
     body: {
-      userId?: string;
       kind?: string;
       domainKey?: string;
       domainLabel?: string;
@@ -48,20 +55,23 @@ export class PipelinesController {
       autoNamed?: boolean;
     },
   ) {
-    return this.pipelinesService.createPipeline(body);
+    return this.pipelinesService.createPipeline(await requireUserId(this.authService, request), body);
   }
 
   @Get('pipelines/:pipelineId')
-  getPipeline(@Param('pipelineId') pipelineId: string) {
-    return this.pipelinesService.getPipeline(pipelineId);
+  async getPipeline(
+    @Req() request: MinimalRequest,
+    @Param('pipelineId') pipelineId: string,
+  ) {
+    return this.pipelinesService.getPipeline(pipelineId, await resolveOptionalUserId(this.authService, request));
   }
 
   @Patch('pipelines/:pipelineId')
-  updatePipeline(
+  async updatePipeline(
+    @Req() request: MinimalRequest,
     @Param('pipelineId') pipelineId: string,
     @Body()
     body: {
-      userId?: string;
       kind?: string;
       domainKey?: string;
       domainLabel?: string;
@@ -71,24 +81,26 @@ export class PipelinesController {
       autoNamed?: boolean;
     },
   ) {
-    return this.pipelinesService.updatePipeline(pipelineId, body);
+    return this.pipelinesService.updatePipeline(pipelineId, await requireUserId(this.authService, request), body);
   }
 
   @Post('pipelines/:pipelineId/duplicate')
-  duplicatePipeline(
+  async duplicatePipeline(
+    @Req() request: MinimalRequest,
     @Param('pipelineId') pipelineId: string,
-    @Body() body: { userId?: string; title?: string },
+    @Body() body: { title?: string },
   ) {
-    return this.pipelinesService.duplicatePipeline(pipelineId, body);
+    return this.pipelinesService.duplicatePipeline(pipelineId, await requireUserId(this.authService, request), body);
   }
 
   @Delete('pipelines/:pipelineId')
-  deletePipeline(@Param('pipelineId') pipelineId: string) {
-    return this.pipelinesService.deletePipeline(pipelineId);
+  async deletePipeline(@Req() request: MinimalRequest, @Param('pipelineId') pipelineId: string) {
+    return this.pipelinesService.deletePipeline(pipelineId, await requireUserId(this.authService, request));
   }
 
   @Post('pipelines/:pipelineId/modules')
-  addModule(
+  async addModule(
+    @Req() request: MinimalRequest,
     @Param('pipelineId') pipelineId: string,
     @Body()
     body: {
@@ -98,6 +110,7 @@ export class PipelinesController {
     },
   ) {
     return this.pipelinesService.addModule(pipelineId, {
+      actorUserId: await requireUserId(this.authService, request),
       moduleId: body.moduleId,
       afterModuleId: body.afterModuleId,
       layout: body.layout,
@@ -105,86 +118,130 @@ export class PipelinesController {
   }
 
   @Patch('pipelines/:pipelineId/modules/reorder')
-  reorderModules(
+  async reorderModules(
+    @Req() request: MinimalRequest,
     @Param('pipelineId') pipelineId: string,
     @Body() body: { moduleIds?: string[] },
   ) {
-    return this.pipelinesService.reorderModules(pipelineId, body);
+    return this.pipelinesService.reorderModules(
+      pipelineId,
+      await requireUserId(this.authService, request),
+      body,
+    );
   }
 
   @Patch('pipelines/:pipelineId/modules/:moduleId/position')
-  updateModulePosition(
+  async updateModulePosition(
+    @Req() request: MinimalRequest,
     @Param('pipelineId') pipelineId: string,
     @Param('moduleId') moduleId: string,
     @Body() body: { position?: { x?: number; y?: number } },
   ) {
-    return this.pipelinesService.updateModulePosition(pipelineId, moduleId, body);
+    return this.pipelinesService.updateModulePosition(
+      pipelineId,
+      await requireUserId(this.authService, request),
+      moduleId,
+      body,
+    );
   }
 
   @Patch('pipelines/:pipelineId/connections')
-  updateConnections(
+  async updateConnections(
+    @Req() request: MinimalRequest,
     @Param('pipelineId') pipelineId: string,
     @Body() body: { connectedAfter?: string[] },
   ) {
-    return this.pipelinesService.updateConnections(pipelineId, body);
+    return this.pipelinesService.updateConnections(
+      pipelineId,
+      await requireUserId(this.authService, request),
+      body,
+    );
   }
 
   @Post('pipelines/:pipelineId/connections/:moduleId/connect')
-  connectAfter(
+  async connectAfter(
+    @Req() request: MinimalRequest,
     @Param('pipelineId') pipelineId: string,
     @Param('moduleId') moduleId: string,
   ) {
-    return this.pipelinesService.connectAfter(pipelineId, moduleId);
+    return this.pipelinesService.connectAfter(
+      pipelineId,
+      await requireUserId(this.authService, request),
+      moduleId,
+    );
   }
 
   @Delete('pipelines/:pipelineId/connections/:moduleId')
-  disconnectAfter(
+  async disconnectAfter(
+    @Req() request: MinimalRequest,
     @Param('pipelineId') pipelineId: string,
     @Param('moduleId') moduleId: string,
   ) {
-    return this.pipelinesService.disconnectAfter(pipelineId, moduleId);
+    return this.pipelinesService.disconnectAfter(
+      pipelineId,
+      await requireUserId(this.authService, request),
+      moduleId,
+    );
   }
 
   @Delete('pipelines/:pipelineId/modules/:moduleId')
-  removeModule(
+  async removeModule(
+    @Req() request: MinimalRequest,
     @Param('pipelineId') pipelineId: string,
     @Param('moduleId') moduleId: string,
   ) {
-    return this.pipelinesService.removeModule(pipelineId, moduleId);
+    return this.pipelinesService.removeModule(
+      pipelineId,
+      await requireUserId(this.authService, request),
+      moduleId,
+    );
   }
 
   @Get('pipelines/:pipelineId/module-snapshots')
-  listModuleSnapshots(
+  async listModuleSnapshots(
+    @Req() request: MinimalRequest,
     @Param('pipelineId') pipelineId: string,
-    @Query('userId') userId?: string,
   ) {
-    return this.pipelinesService.listModuleSnapshots(pipelineId, userId);
+    return this.pipelinesService.listModuleSnapshots(
+      pipelineId,
+      await resolveOptionalUserId(this.authService, request),
+    );
   }
 
   @Get('pipelines/:pipelineId/module-snapshots/:moduleId')
-  getModuleSnapshot(
+  async getModuleSnapshot(
+    @Req() request: MinimalRequest,
     @Param('pipelineId') pipelineId: string,
     @Param('moduleId') moduleId: string,
-    @Query('userId') userId?: string,
   ) {
-    return this.pipelinesService.getModuleSnapshot(pipelineId, moduleId, userId);
+    return this.pipelinesService.getModuleSnapshot(
+      pipelineId,
+      moduleId,
+      await resolveOptionalUserId(this.authService, request),
+    );
   }
 
   @Put('pipelines/:pipelineId/module-snapshots/:moduleId')
-  saveModuleSnapshot(
+  async saveModuleSnapshot(
+    @Req() request: MinimalRequest,
     @Param('pipelineId') pipelineId: string,
     @Param('moduleId') moduleId: string,
-    @Body() body: { userId?: string; summary?: string; data?: Record<string, unknown> | null },
+    @Body() body: { summary?: string; data?: Record<string, unknown> | null },
   ) {
-    return this.pipelinesService.saveModuleSnapshot(pipelineId, moduleId, body);
+    return this.pipelinesService.saveModuleSnapshot(
+      pipelineId,
+      moduleId,
+      await requireUserId(this.authService, request),
+      body,
+    );
   }
 
   @Post('pipelines/:pipelineId/modules/search/collection-jobs')
-  createSearchCollectionJob(
+  async createSearchCollectionJob(
+    @Req() request: MinimalRequest,
     @Param('pipelineId') pipelineId: string,
     @Body()
     body: {
-      userId?: string;
       query?: string;
       kind?: 'dataset' | 'knowledge' | 'both';
       sources?: Array<'seed-catalog' | 'huggingface' | 'openml' | 'uci' | 'kaggle' | 'serpapi' | 'crossref'>;
@@ -202,6 +259,10 @@ export class PipelinesController {
       domainModuleId?: string;
     },
   ) {
-    return this.pipelinesService.createSearchCollectionJob(pipelineId, body);
+    return this.pipelinesService.createSearchCollectionJob(
+      pipelineId,
+      await requireUserId(this.authService, request),
+      body,
+    );
   }
 }
