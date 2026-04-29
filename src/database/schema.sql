@@ -19,6 +19,15 @@ create table if not exists oauth_accounts (
   unique(provider, provider_user_id)
 );
 
+create table if not exists local_accounts (
+  id text primary key,
+  user_id text not null references users(id) on delete cascade,
+  login_id text not null unique,
+  password_hash text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists refresh_tokens (
   id text primary key,
   user_id text not null references users(id) on delete cascade,
@@ -175,6 +184,7 @@ create table if not exists job_logs (
 );
 
 create index if not exists idx_oauth_accounts_user_id on oauth_accounts(user_id);
+create index if not exists idx_local_accounts_user_id on local_accounts(user_id);
 create index if not exists idx_refresh_tokens_user_id on refresh_tokens(user_id);
 create index if not exists idx_data_sources_user_id on data_sources(user_id);
 create index if not exists idx_pipelines_user_id on pipelines(user_id);

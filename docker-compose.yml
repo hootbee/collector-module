@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: stage_one
       POSTGRES_PASSWORD: stage_one
     ports:
-      - "5432:5432"
+      - "11118:5432"
     volumes:
       - stage_one_postgres_data:/var/lib/postgresql/data
       - ./src/database/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
@@ -31,6 +31,7 @@ services:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: 8787
+      CORS_ALLOW_ORIGINS: http://210.117.143.172:7634,http://localhost:7634,http://127.0.0.1:7634
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET}
       AUTH_REFRESH_TOKEN_SECRET: ${AUTH_REFRESH_TOKEN_SECRET}
       DATABASE_URL: postgres://stage_one:stage_one@postgres:5432/stage_one
@@ -47,7 +48,7 @@ services:
       DB_SSL: "false"
       STORE_BACKEND: postgres
     ports:
-      - "8787:8787"
+      - "11119:8787"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8787/api/v1/health >/dev/null 2>&1 || exit 1"]

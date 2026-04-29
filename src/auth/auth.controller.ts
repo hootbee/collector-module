@@ -16,6 +16,35 @@ const refreshCookieName = 'stage_one_refresh';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Post('signup')
+  async signup(
+    @Body() body: { name?: string; loginId?: string; password?: string },
+    @Res({ passthrough: true }) response: MinimalResponse,
+  ) {
+    const login = await this.authService.signupWithCredentials({
+      name: body.name ?? '',
+      loginId: body.loginId ?? '',
+      password: body.password ?? '',
+    });
+    this.setRefreshCookie(response, login.refreshToken, login.refreshExpiresAt);
+    const { refreshToken: _refreshToken, refreshExpiresAt: _refreshExpiresAt, ...publicResponse } = login;
+    return publicResponse;
+  }
+
+  @Post('login')
+  async login(
+    @Body() body: { loginId?: string; password?: string },
+    @Res({ passthrough: true }) response: MinimalResponse,
+  ) {
+    const login = await this.authService.loginWithCredentials({
+      loginId: body.loginId ?? '',
+      password: body.password ?? '',
+    });
+    this.setRefreshCookie(response, login.refreshToken, login.refreshExpiresAt);
+    const { refreshToken: _refreshToken, refreshExpiresAt: _refreshExpiresAt, ...publicResponse } = login;
+    return publicResponse;
+  }
+
   @Post('google')
   async loginWithGoogle(
     @Body() body: { idToken?: string; accessToken?: string },

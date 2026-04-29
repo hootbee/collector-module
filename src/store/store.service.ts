@@ -40,6 +40,7 @@ export class StoreService {
   private memoryLogId = 1;
   private readonly users = new Map<string, UserRecord>();
   private readonly oauthAccounts = new Map<string, OAuthAccountRecord>();
+  private readonly localAccounts = new Map<string, { userId: string; passwordHash: string }>();
   private readonly refreshTokens = new Map<string, RefreshTokenRecord>();
 
   constructor(private readonly databaseService: DatabaseService) {}
@@ -66,6 +67,61 @@ export class StoreService {
       return result.rows[0] ? this.userFromRow(result.rows[0]) : undefined;
     }
     return this.users.get(userId);
+  }
+
+  async createLocalUser(input: {
+    name: string;
+    loginId: string;
+    passwordHash: string;
+  }): Promise<UserRecord> {
+    if (this.usePostgres()) {
+      return this.createLocalUserInPostgres(input);
+    }
+    return this.createLocalUserInMemory(input);
+  }
+
+  async findLocalAuthByLoginId(loginId: string): Promise<{ user: UserRecord; passwordHash: string } | undefined> {
+    const normalized = loginId.trim().toLowerCase();
+    if (this.usePostgres()) {
+      const result = await this.databaseService.query<LocalAccountLookupRow>(
+        [
+          'select',
+          'u.id as user_id, u.email as user_email, u.name as user_name, u.avatar_url as user_avatar_url,',
+          'u.role as user_role, u.created_at as user_created_at, u.updated_at as user_updated_at,',
+          'la.password_hash as password_hash',
+          'from local_accounts la',
+          'join users u on u.id = la.user_id',
+          'where lower(la.login_id) = lower($1)',
+          'limit 1',
+        ].join(' '),
+        [normalized],
+      );
+      const row = result.rows[0];
+      if (!row) {
+        return undefined;
+      }
+      return {
+        user: {
+          id: row.user_id,
+          email: row.user_email,
+          name: row.user_name,
+          avatarUrl: row.user_avatar_url ?? undefined,
+          role: row.user_role,
+          createdAt: this.iso(row.user_created_at),
+          updatedAt: this.iso(row.user_updated_at),
+        },
+        passwordHash: row.password_hash,
+      };
+    }
+    const account = this.localAccounts.get(normalized);
+    if (!account) {
+      return undefined;
+    }
+    const user = this.users.get(account.userId);
+    if (!user) {
+      return undefined;
+    }
+    return { user, passwordHash: account.passwordHash };
   }
 
   async createRefreshToken(input: {
@@ -946,6 +1002,72 @@ export class StoreService {
     });
   }
 
+  private async createLocalUserInPostgres(input: {
+    name: string;
+    loginId: string;
+    passwordHash: string;
+  }): Promise<UserRecord> {
+    return this.databaseService.withClient(async (client) => {
+      await client.query('begin');
+      try {
+        const now = nowIso();
+        const userId = `user-${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+        const userResult = await client.query<UserRow>(
+          [
+            'insert into users (id, email, name, avatar_url, role, created_at, updated_at)',
+            'values ($1, $2, $3, $4, $5, $6, $7)',
+            'returning *',
+          ].join(' '),
+          [userId, input.loginId.trim().toLowerCase(), input.name, null, 'user', now, now],
+        );
+
+        await client.query(
+          [
+            'insert into local_accounts (id, user_id, login_id, password_hash, created_at, updated_at)',
+            'values ($1, $2, $3, $4, $5, $6)',
+          ].join(' '),
+          [
+            `local-${randomUUID().replace(/-/g, '').slice(0, 12)}`,
+            userId,
+            input.loginId.trim().toLowerCase(),
+            input.passwordHash,
+            now,
+            now,
+          ],
+        );
+        await client.query('commit');
+        return this.userFromRow(userResult.rows[0]);
+      } catch (error) {
+        await client.query('rollback');
+        throw error;
+      }
+    });
+  }
+
+  private createLocalUserInMemory(input: {
+    name: string;
+    loginId: string;
+    passwordHash: string;
+  }): UserRecord {
+    const now = nowIso();
+    const normalized = input.loginId.trim().toLowerCase();
+    const user: UserRecord = {
+      id: `user-${randomUUID().replace(/-/g, '').slice(0, 12)}`,
+      email: normalized,
+      name: input.name,
+      avatarUrl: undefined,
+      role: 'user',
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.users.set(user.id, user);
+    this.localAccounts.set(normalized, {
+      userId: user.id,
+      passwordHash: input.passwordHash,
+    });
+    return user;
+  }
+
   private upsertOAuthUserInMemory(input: {
     provider: AuthProvider;
     providerUserId: string;
@@ -1426,6 +1548,17 @@ type OAuthAccountRow = {
   email: string;
   created_at: string | Date;
   updated_at: string | Date;
+};
+
+type LocalAccountLookupRow = {
+  user_id: string;
+  user_email: string;
+  user_name: string;
+  user_avatar_url: string | null;
+  user_role: 'user' | 'admin';
+  user_created_at: string | Date;
+  user_updated_at: string | Date;
+  password_hash: string;
 };
 
 type RefreshTokenRow = {

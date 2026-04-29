@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: stage_one
       POSTGRES_PASSWORD: stage_one
     ports:
-      - "5432:5432"
+      - "11118:5432"
     volumes:
       - stage_one_postgres_data:/var/lib/postgresql/data
     healthcheck:

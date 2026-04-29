@@ -1,6 +1,7 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import type { AuthLoginResponse, AuthUserResponse, UserRecord } from '../common/contracts';
 import { StoreService } from '../store/store.service';
+import { AuthPasswordService } from './auth-password.service';
 import { AuthTokenService } from './auth-token.service';
 import { GoogleOAuthService } from './google-oauth.service';
 
@@ -8,9 +9,74 @@ import { GoogleOAuthService } from './google-oauth.service';
 export class AuthService {
   constructor(
     private readonly storeService: StoreService,
+    private readonly authPasswordService: AuthPasswordService,
     private readonly googleOAuthService: GoogleOAuthService,
     private readonly tokenService: AuthTokenService,
   ) {}
+
+  async signupWithCredentials(input: {
+    name: string;
+    loginId: string;
+    password: string;
+  }): Promise<AuthLoginResponse & { refreshToken: string; refreshExpiresAt: string }> {
+    const name = input.name.trim();
+    const loginId = input.loginId.trim();
+    const password = input.password;
+
+    if (!name) {
+      throw new UnauthorizedException('Name is required.');
+    }
+    if (!loginId || loginId.length < 3) {
+      throw new UnauthorizedException('Login ID must be at least 3 characters.');
+    }
+    if (!password || password.length < 8) {
+      throw new UnauthorizedException('Password must be at least 8 characters.');
+    }
+
+    const existing = await this.storeService.findLocalAuthByLoginId(loginId);
+    if (existing) {
+      throw new ConflictException('Login ID is already taken.');
+    }
+
+    let user: UserRecord;
+    try {
+      user = await this.storeService.createLocalUser({
+        name,
+        loginId,
+        passwordHash: this.authPasswordService.hashPassword(password),
+      });
+    } catch (error) {
+      const code = (error as { code?: string })?.code;
+      if (code === '23505') {
+        throw new ConflictException('Login ID is already taken.');
+      }
+      throw error;
+    }
+    return this.issueLoginResponse(user);
+  }
+
+  async loginWithCredentials(input: {
+    loginId: string;
+    password: string;
+  }): Promise<AuthLoginResponse & { refreshToken: string; refreshExpiresAt: string }> {
+    const loginId = input.loginId.trim();
+    const password = input.password;
+    if (!loginId || !password) {
+      throw new UnauthorizedException('Login ID and password are required.');
+    }
+
+    const local = await this.storeService.findLocalAuthByLoginId(loginId);
+    if (!local) {
+      throw new UnauthorizedException('Invalid login credentials.');
+    }
+
+    const valid = this.authPasswordService.verifyPassword(password, local.passwordHash);
+    if (!valid) {
+      throw new UnauthorizedException('Invalid login credentials.');
+    }
+
+    return this.issueLoginResponse(local.user);
+  }
 
   async loginWithGoogle(input: {
     idToken?: string;
