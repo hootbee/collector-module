@@ -77,6 +77,27 @@ COLLECTION_BROWSER_FALLBACK_ENABLED=true npm run collection:browser:smoke
 - `GET /api/v1/collection/downloads/:downloadJobId`
 - `GET /api/v1/collection/downloads/:downloadJobId/results`
 
+### 목록 조회 응답(Auth Required Signal)
+
+- `GET /api/v1/data-sources`
+- `GET /api/v1/pipelines`
+
+위 목록 API는 `200 OK`를 유지하며 아래 필드를 함께 반환합니다.
+
+- `items`: 실제 목록 배열
+- `authRequired`: 비로그인 상태에서 `true`
+- `message`: 로그인 유도 메시지(선택)
+
+예시(비로그인):
+
+```json
+{
+  "items": [],
+  "authRequired": true,
+  "message": "로그인이 필요한 기능입니다."
+}
+```
+
 ## Auth
 
 초기 auth는 API 내부 모듈로 구현되어 있습니다.

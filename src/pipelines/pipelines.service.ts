@@ -5,6 +5,7 @@ import type {
   ModalitySignal,
   ModuleSnapshotListResponse,
   ModuleSnapshotResponse,
+  PipelineListResponse,
   PipelineRecord,
   PipelineResponse,
   PipelineTemplateListResponse,
@@ -69,12 +70,20 @@ export class PipelinesService {
     return { pipeline };
   }
 
-  async listPipelines(userId?: string | null): Promise<{ pipelines: PipelineRecord[] }> {
+  async listPipelines(userId?: string | null): Promise<PipelineListResponse> {
     if (!userId) {
-      return { pipelines: [] };
+      return {
+        items: [],
+        pipelines: [],
+        authRequired: true,
+        message: '로그인이 필요한 기능입니다.',
+      };
     }
+    const items = await this.storeService.listPipelines(userId);
     return {
-      pipelines: await this.storeService.listPipelines(userId),
+      items,
+      pipelines: items,
+      authRequired: false,
     };
   }
 

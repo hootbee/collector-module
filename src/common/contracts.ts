@@ -553,7 +553,17 @@ export type DataSourceResponse = {
 };
 
 export type DataSourceListResponse = {
+  items: DataSourceRecord[];
   dataSources: DataSourceRecord[];
+  authRequired: boolean;
+  message?: string;
+};
+
+export type PipelineListResponse = {
+  items: PipelineRecord[];
+  pipelines: PipelineRecord[];
+  authRequired: boolean;
+  message?: string;
 };
 
 export type ModuleSnapshotRecord = {

@@ -34,6 +34,11 @@ async function main() {
   const baseUrl = await app.getUrl();
 
   try {
+    const unauthList = await requestJson<{ items: unknown[]; authRequired: boolean }>(`${baseUrl}/api/v1/pipelines`);
+    if (!Array.isArray(unauthList.items) || unauthList.authRequired !== true) {
+      throw new Error('unauth list response must include items[] and authRequired=true');
+    }
+
     const auth = await loginAsSmokeUser(baseUrl);
     const authHeaders = {
       'Content-Type': 'application/json',
@@ -140,6 +145,7 @@ async function main() {
     console.log(JSON.stringify({
       status: 'ok',
       baseUrl,
+      unauthList,
       created,
       updated,
       reordered,

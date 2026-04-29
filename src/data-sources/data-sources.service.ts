@@ -23,10 +23,18 @@ export class DataSourcesService {
 
   async list(userId?: string | null): Promise<DataSourceListResponse> {
     if (!userId) {
-      return { dataSources: [] };
+      return {
+        items: [],
+        dataSources: [],
+        authRequired: true,
+        message: '로그인이 필요한 기능입니다.',
+      };
     }
+    const items = await this.storeService.listDataSources(this.cleanOptional(userId));
     return {
-      dataSources: await this.storeService.listDataSources(this.cleanOptional(userId)),
+      items,
+      dataSources: items,
+      authRequired: false,
     };
   }
 
