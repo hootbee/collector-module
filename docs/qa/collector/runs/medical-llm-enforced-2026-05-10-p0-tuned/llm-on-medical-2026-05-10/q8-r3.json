@@ -1,0 +1,637 @@
+{
+  "jobId": "collection-dc48e2b46b84",
+  "query": "length of stay prediction ehr dataset",
+  "kind": "both",
+  "requestedSources": [
+    "seed-catalog"
+  ],
+  "status": "completed",
+  "stage": "completed",
+  "datasetQueries": [
+    "length of stay prediction ehr dataset",
+    "length of stay prediction",
+    "time series forecasting",
+    "stock prediction",
+    "ohlcv",
+    "length of stay prediction ehr dataset tabular",
+    "clinical cohort stay length dataset",
+    "stock forecasting",
+    "ehr length of stay prediction dataset",
+    "hospital stay longitudinal data"
+  ],
+  "knowledgeQueries": [
+    "length of stay prediction ehr dataset paper",
+    "length of stay prediction paper",
+    "length of stay prediction overview",
+    "financial time series forecasting paper",
+    "length of stay prediction clinical dataset",
+    "length of stay prediction patient cohort",
+    "length of stay prediction adverse event",
+    "length of stay prediction clinical dataset paper",
+    "ehr stay length prediction overview",
+    "length of stay prediction ehr dataset overview"
+  ],
+  "mustInclude": [
+    "clinical",
+    "patient",
+    "cohort",
+    "visit",
+    "outcome",
+    "mortality",
+    "adverse event",
+    "ehr",
+    "emr",
+    "length",
+    "of",
+    "stay",
+    "prediction"
+  ],
+  "mustAvoid": [
+    "stock",
+    "ohlcv",
+    "fraud",
+    "authorship",
+    "essay",
+    "stylometry",
+    "predictive maintenance"
+  ],
+  "llmPlanRaw": "{\n  \"canonicalIntent\": \"predict length of stay using clinical EHR data\",\n  \"taskSignals\": [\"regression\", \"time-series-forecasting\"],\n  \"modalitySignals\": [\"tabular\", \"longitudinal\"],\n  \"mustInclude\": [\"clinical\", \"patient\", \"cohort\", \"visit\", \"outcome\", \"mortality\", \"adverse event\", \"ehr\", \"emr\", \"length\", \"of\", \"stay\"],\n  \"mustAvoid\": [\"stock\", \"ohlcv\", \"fraud\", \"authorship\", \"essay\", \"stylometry\", \"predictive maintenance\"],\n  \"datasetSourceQueries\": {\n    \"seed-catalog\": [\"length of stay prediction ehr dataset tabular\", \"clinical cohort stay length dataset\"],\n    \"huggingface\": [\"ehr length of stay prediction dataset\", \"hospital stay longitudinal data\"],\n    \"openml\": [\"hospital length of stay tabular dataset\", \"clinical stay outcome dataset\"],\n    \"uci\": [\"hospital stay length dataset\", \"clinical patient stay data\"],\n    \"kaggle\": [\"length of stay prediction ehr dataset\", \"hospital admission stay dataset\"]\n  },\n  \"knowledgeSourceQueries\": {\n    \"seed-catalog\": [\"length of stay prediction clinical dataset paper\", \"ehr stay length prediction overview\"],\n    \"serpapi\": [\"length of stay prediction EHR cohort study\", \"clinical length of stay prediction mortality\"],\n    \"crossref\": [\"length of stay prediction EMR study\", \"hospital stay outcome prediction paper\"]\n  },\n  \"notes\": [\n    \"Focused on clinical EHR/EMR datasets and papers.\",\n    \"Excluded financial and fraud-related terms.\"\n  ]\n}",
+  "llmPlan": {
+    "canonicalIntent": "predict length of stay using clinical EHR data",
+    "taskSignals": [
+      "regression",
+      "time-series-forecasting"
+    ],
+    "modalitySignals": [
+      "tabular",
+      "longitudinal"
+    ],
+    "mustInclude": [
+      "clinical",
+      "patient",
+      "cohort",
+      "visit",
+      "outcome",
+      "mortality",
+      "adverse event",
+      "ehr",
+      "emr",
+      "length",
+      "of",
+      "stay"
+    ],
+    "mustAvoid": [
+      "stock",
+      "ohlcv",
+      "fraud",
+      "authorship",
+      "essay",
+      "stylometry",
+      "predictive maintenance"
+    ],
+    "datasetSourceQueries": {
+      "seed-catalog": [
+        "length of stay prediction ehr dataset tabular",
+        "clinical cohort stay length dataset"
+      ],
+      "huggingface": [
+        "ehr length of stay prediction dataset",
+        "hospital stay longitudinal data"
+      ],
+      "openml": [
+        "hospital length of stay tabular dataset",
+        "clinical stay outcome dataset"
+      ],
+      "uci": [
+        "hospital stay length dataset",
+        "clinical patient stay data"
+      ],
+      "kaggle": [
+        "length of stay prediction ehr dataset",
+        "hospital admission stay dataset"
+      ]
+    },
+    "knowledgeSourceQueries": {
+      "seed-catalog": [
+        "length of stay prediction clinical dataset paper",
+        "ehr stay length prediction overview"
+      ],
+      "serpapi": [
+        "length of stay prediction EHR cohort study",
+        "clinical length of stay prediction mortality"
+      ],
+      "crossref": [
+        "length of stay prediction EMR study",
+        "hospital stay outcome prediction paper"
+      ]
+    },
+    "notes": [
+      "Focused on clinical EHR/EMR datasets and papers.",
+      "Excluded financial and fraud-related terms."
+    ]
+  },
+  "connectorStatuses": [
+    {
+      "connector": "seed-catalog",
+      "status": "ok",
+      "count": 2,
+      "errors": []
+    }
+  ],
+  "routedHits": [
+    {
+      "sourceHitId": "kn-ai-text-detection-overview",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-authorship-methods",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-text-provenance",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-generated-text-bias",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-writing-assessment",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-market-forecasting-overview",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-technical-indicator-leakage",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-ich-e2a",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-faers-overview",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-biomarker-batch",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-fraud-threshold",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-predictive-maintenance",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-air-quality",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-public-policy",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-missing-longitudinal",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-hc3",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://huggingface.co/datasets",
+      "detectedHost": "huggingface.co",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-authorship-corpus",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://huggingface.co/datasets",
+      "detectedHost": "huggingface.co",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-generated-text-detection",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://huggingface.co/datasets",
+      "detectedHost": "huggingface.co",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-multilingual-text-classification",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://huggingface.co/datasets",
+      "detectedHost": "huggingface.co",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-writing-quality",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://huggingface.co/datasets",
+      "detectedHost": "huggingface.co",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-yahoo-ohlcv-history",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://finance.yahoo.com",
+      "detectedHost": "finance.yahoo.com",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-market-technical-indicators",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://huggingface.co/datasets",
+      "detectedHost": "huggingface.co",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-mimic-demo",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://physionet.org",
+      "detectedHost": "physionet.org",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-synthea",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://synthetichealth.github.io/synthea/",
+      "detectedHost": "synthetichealth.github.io",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-credit-card-fraud",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://www.kaggle.com",
+      "detectedHost": "kaggle.com",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-ieee-fraud",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://www.kaggle.com",
+      "detectedHost": "kaggle.com",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-nasa-turbofan",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://www.nasa.gov",
+      "detectedHost": "nasa.gov",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    }
+  ],
+  "fetchedDocuments": [],
+  "rawKnowledgeHits": [],
+  "rawDatasetHits": [
+    {
+      "id": "ds-mimic-demo",
+      "connector": "seed-catalog",
+      "sourceType": "seed",
+      "layer": "structured",
+      "sourcePriority": 0.7,
+      "sourceReliability": 0.7,
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "detectedHost": "physionet.org",
+      "routedConnector": "seed-catalog",
+      "metadataCompleteness": 0.8666666666666667,
+      "extractionMethod": "direct",
+      "extractionReliability": 0.7,
+      "title": "MIMIC III demo subset",
+      "text": "MIMIC III demo subset Clinical patient visit table with vitals, labs, and outcome context. PhysioNet Clinical ICU visit sample table (patient / visit)",
+      "tags": [
+        "clinical",
+        "patient",
+        "vital",
+        "lab",
+        "visit"
+      ],
+      "domainIds": [
+        "dom-medical"
+      ],
+      "taskSignals": [
+        "classification"
+      ],
+      "modalitySignals": [
+        "tabular",
+        "longitudinal"
+      ],
+      "modality": "table",
+      "negativeTags": [
+        "generated",
+        "authorship",
+        "prompt"
+      ],
+      "matchedQueries": [
+        "clinical cohort stay length dataset"
+      ],
+      "matchedTerms": [
+        "clinical",
+        "patient",
+        "visit",
+        "outcome"
+      ],
+      "provider": "PhysioNet",
+      "providerDetail": "Clinical ICU visit sample",
+      "sourceUrl": "https://physionet.org",
+      "retrievalHint": "Clinical visit benchmark with patient and lab signals."
+    },
+    {
+      "id": "ds-synthea",
+      "connector": "seed-catalog",
+      "sourceType": "seed",
+      "layer": "structured",
+      "sourcePriority": 0.7,
+      "sourceReliability": 0.7,
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "detectedHost": "synthetichealth.github.io",
+      "routedConnector": "seed-catalog",
+      "metadataCompleteness": 0.8666666666666667,
+      "extractionMethod": "direct",
+      "extractionReliability": 0.7,
+      "title": "Synthea synthetic cohort sample",
+      "text": "Synthea synthetic cohort sample Synthetic patient visit, medication, and laboratory records. Synthea Synthetic healthcare records longitudinal visit log",
+      "tags": [
+        "clinical",
+        "synthetic",
+        "visit",
+        "lab",
+        "cohort"
+      ],
+      "domainIds": [
+        "dom-medical"
+      ],
+      "taskSignals": [
+        "classification"
+      ],
+      "modalitySignals": [
+        "tabular",
+        "longitudinal"
+      ],
+      "modality": "table",
+      "negativeTags": [
+        "generated text",
+        "authorship"
+      ],
+      "matchedQueries": [
+        "clinical cohort stay length dataset"
+      ],
+      "matchedTerms": [
+        "clinical",
+        "patient",
+        "cohort",
+        "visit"
+      ],
+      "provider": "Synthea",
+      "providerDetail": "Synthetic healthcare records",
+      "sourceUrl": "https://synthetichealth.github.io/synthea/",
+      "retrievalHint": "Synthetic healthcare dataset with longitudinal visit structure."
+    }
+  ],
+  "knowledgeItems": [],
+  "datasetItems": [
+    {
+      "id": "ds-mimic-demo",
+      "name": "MIMIC III demo subset",
+      "provider": "PhysioNet",
+      "description": "Clinical patient visit table with vitals, labs, and outcome context.",
+      "rowsHint": "100 to 10000 rows depending on slice",
+      "modality": "table (patient / visit)",
+      "licenseHint": "Credential required for full dataset",
+      "matchedKeywords": [
+        "clinical",
+        "patient",
+        "visit",
+        "outcome",
+        "cohort",
+        "length",
+        "stay"
+      ],
+      "sourceUrl": "https://physionet.org",
+      "providerDetail": "Clinical ICU visit sample",
+      "retrievalHint": "Clinical visit benchmark with patient and lab signals.",
+      "matchedReason": "layer=structured | classification=known",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "detectedHost": "physionet.org",
+      "routedConnector": "seed-catalog",
+      "metadataCompleteness": 0.8666666666666667,
+      "extractionMethod": "direct",
+      "extractionReliability": 0.7,
+      "domainMatchScore": 1,
+      "medicalSignalsMatched": [
+        "clinical",
+        "patient",
+        "cohort",
+        "visit",
+        "outcome",
+        "icu"
+      ],
+      "reasonCodes": [
+        "medical_signal_match",
+        "medical_high_confidence"
+      ],
+      "nonMedicalPenaltyApplied": false,
+      "excludedByMedicalGate": false
+    },
+    {
+      "id": "ds-synthea",
+      "name": "Synthea synthetic cohort sample",
+      "provider": "Synthea",
+      "description": "Synthetic patient visit, medication, and laboratory records.",
+      "rowsHint": "5000 to 50000 rows",
+      "modality": "longitudinal visit log",
+      "licenseHint": "Apache 2.0",
+      "matchedKeywords": [
+        "clinical",
+        "patient",
+        "cohort",
+        "visit",
+        "length",
+        "stay",
+        "longitudinal"
+      ],
+      "sourceUrl": "https://synthetichealth.github.io/synthea/",
+      "providerDetail": "Synthetic healthcare records",
+      "retrievalHint": "Synthetic healthcare dataset with longitudinal visit structure.",
+      "matchedReason": "layer=structured | classification=known",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "detectedHost": "synthetichealth.github.io",
+      "routedConnector": "seed-catalog",
+      "metadataCompleteness": 0.8666666666666667,
+      "extractionMethod": "direct",
+      "extractionReliability": 0.7,
+      "domainMatchScore": 0.6666666666666666,
+      "medicalSignalsMatched": [
+        "clinical",
+        "patient",
+        "cohort",
+        "visit"
+      ],
+      "reasonCodes": [
+        "medical_signal_match",
+        "medical_medium_confidence"
+      ],
+      "nonMedicalPenaltyApplied": false,
+      "excludedByMedicalGate": false
+    }
+  ]
+}

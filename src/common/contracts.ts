@@ -129,6 +129,8 @@ export type ExternalKnowledgeItem = {
   domainMatchScore?: number;
   medicalSignalsMatched?: string[];
   reasonCodes?: string[];
+  nonMedicalPenaltyApplied?: boolean;
+  excludedByMedicalGate?: boolean;
 };
 
 export type ExternalDatasetItem = {
@@ -162,6 +164,8 @@ export type ExternalDatasetItem = {
   domainMatchScore?: number;
   medicalSignalsMatched?: string[];
   reasonCodes?: string[];
+  nonMedicalPenaltyApplied?: boolean;
+  excludedByMedicalGate?: boolean;
 };
 
 export type SelectedExternalResourcesRecord = {

@@ -1,0 +1,31 @@
+file,query,llm_plan_present,llm_plan_raw_present,dataset_count,knowledge_count,top10_medical_relevant,top10_total,top10_medical_relevance_rate,non_medical_noise_top10,trusted_source_rate_top10,run_status
+q1-r1.json,icu mortality prediction dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q1-r2.json,icu mortality prediction dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q1-r3.json,icu mortality prediction dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q2-r1.json,hospital readmission risk cohort dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q2-r2.json,hospital readmission risk cohort dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q2-r3.json,hospital readmission risk cohort dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q3-r1.json,sepsis early warning longitudinal dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q3-r2.json,sepsis early warning longitudinal dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q3-r3.json,sepsis early warning longitudinal dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q4-r1.json,ehr adverse event detection dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q4-r2.json,ehr adverse event detection dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q4-r3.json,ehr adverse event detection dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q5-r1.json,clinical outcome prediction tabular dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q5-r2.json,clinical outcome prediction tabular dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q5-r3.json,clinical outcome prediction tabular dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q6-r1.json,intensive care unit patient cohort dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q6-r2.json,intensive care unit patient cohort dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q6-r3.json,intensive care unit patient cohort dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q7-r1.json,medication safety signal detection dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q7-r2.json,medication safety signal detection dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q7-r3.json,medication safety signal detection dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q8-r1.json,length of stay prediction ehr dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q8-r2.json,length of stay prediction ehr dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q8-r3.json,length of stay prediction ehr dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q9-r1.json,clinical triage risk stratification dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q9-r2.json,clinical triage risk stratification dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q9-r3.json,clinical triage risk stratification dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q10-r1.json,critical care deterioration prediction dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q10-r2.json,critical care deterioration prediction dataset,True,True,2,0,2,2,1.0,0,1.0,completed
+q10-r3.json,critical care deterioration prediction dataset,True,True,2,0,2,2,1.0,0,1.0,completed

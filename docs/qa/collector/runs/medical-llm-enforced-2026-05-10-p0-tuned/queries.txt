@@ -1,0 +1,10 @@
+icu mortality prediction dataset
+hospital readmission risk cohort dataset
+sepsis early warning longitudinal dataset
+ehr adverse event detection dataset
+clinical outcome prediction tabular dataset
+intensive care unit patient cohort dataset
+medication safety signal detection dataset
+length of stay prediction ehr dataset
+clinical triage risk stratification dataset
+critical care deterioration prediction dataset

@@ -175,6 +175,8 @@ export class CollectionNormalizerService {
       domainMatchScore: scoreContext.score,
       medicalSignalsMatched: scoreContext.signals,
       reasonCodes: scoreContext.reasonCodes,
+      nonMedicalPenaltyApplied: scoreContext.reasonCodes.includes('non_medical_signal_match'),
+      excludedByMedicalGate: false,
     };
   }
 
@@ -224,6 +226,8 @@ export class CollectionNormalizerService {
       domainMatchScore: scoreContext.score,
       medicalSignalsMatched: scoreContext.signals,
       reasonCodes: scoreContext.reasonCodes,
+      nonMedicalPenaltyApplied: scoreContext.reasonCodes.includes('non_medical_signal_match'),
+      excludedByMedicalGate: false,
     };
   }
 
@@ -240,8 +244,12 @@ export class CollectionNormalizerService {
     const unique = [...new Set(matched)];
     const score = Math.min(1, unique.length / 6);
     const reasonCodes: string[] = [];
+    const hasNonMedicalSignal = /(stock|ohlcv|fraud|authorship|essay|stylometry|predictive maintenance)/.test(merged);
     if (unique.length > 0) {
       reasonCodes.push('medical_signal_match');
+    }
+    if (hasNonMedicalSignal) {
+      reasonCodes.push('non_medical_signal_match');
     }
     if (score >= 0.7) {
       reasonCodes.push('medical_high_confidence');
