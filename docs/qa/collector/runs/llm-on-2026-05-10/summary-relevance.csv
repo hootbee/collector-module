@@ -1,0 +1,6 @@
+file,query,dataset_count,knowledge_count,llm_plan,top5_relevant,top5_total,top5_relevance_rate
+"q1.json","icu mortality prediction imbalanced clinical tabular dataset",6,15,true,2,5,0.40
+"q2.json","credit card fraud detection highly imbalanced transaction dataset",6,15,true,2,5,0.40
+"q3.json","authorship verification korean text dataset",6,15,true,1,5,0.20
+"q4.json","electricity load forecasting multivariate time series dataset",6,15,true,3,5,0.60
+"q5.json","predictive maintenance anomaly detection sensor dataset",6,15,true,3,5,0.60

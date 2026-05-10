@@ -1,0 +1,11 @@
+file,status,dataset_count,knowledge_count,llm_plan,connector_counts
+off-q1.json,completed,6,15,no,"seed-catalog:21|huggingface:0|openml:0|uci:0|kaggle:0|serpapi:0|crossref:0"
+off-q2.json,completed,6,15,no,"seed-catalog:21|huggingface:0|openml:0|uci:0|kaggle:0|serpapi:0|crossref:0"
+off-q3.json,completed,6,15,no,"seed-catalog:21|huggingface:0|openml:0|uci:0|kaggle:0|serpapi:0|crossref:0"
+off-q4.json,completed,6,15,no,"seed-catalog:21|huggingface:0|openml:0|uci:0|kaggle:0|serpapi:0|crossref:0"
+off-q5.json,completed,6,15,no,"seed-catalog:21|huggingface:0|openml:0|uci:0|kaggle:0|serpapi:0|crossref:0"
+on-q1.json,completed,6,15,no,"seed-catalog:21|huggingface:0|openml:0|uci:0|kaggle:0|serpapi:0|crossref:0"
+on-q2.json,completed,6,15,no,"seed-catalog:21|huggingface:0|openml:0|uci:0|kaggle:0|serpapi:0|crossref:0"
+on-q3.json,completed,6,15,no,"seed-catalog:21|huggingface:0|openml:0|uci:0|kaggle:0|serpapi:0|crossref:0"
+on-q4.json,completed,6,15,no,"seed-catalog:21|huggingface:0|openml:0|uci:0|kaggle:0|serpapi:0|crossref:0"
+on-q5.json,completed,6,15,no,"seed-catalog:21|huggingface:0|openml:0|uci:0|kaggle:0|serpapi:0|crossref:0"

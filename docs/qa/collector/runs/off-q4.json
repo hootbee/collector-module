@@ -1,0 +1,74 @@
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [NestFactory] Starting Nest application...
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [InstanceLoader] StoreModule dependencies initialized +7ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [InstanceLoader] DatabaseModule dependencies initialized +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [InstanceLoader] AuthModule dependencies initialized +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [InstanceLoader] AppModule dependencies initialized +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RoutesResolver] AppController {/api/v1/health}: +1ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/health, GET} route +2ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RoutesResolver] CollectionController {/api/v1/collection}: +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/collection/jobs, POST} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/collection/jobs/:jobId, GET} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/collection/jobs/:jobId/results, GET} route +1ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/collection/jobs/:jobId/downloads, POST} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/collection/downloads/:downloadJobId, GET} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/collection/downloads/:downloadJobId/results, GET} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RoutesResolver] OrchestratorController {/api/v1/orchestrator}: +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/orchestrator/modules, GET} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/orchestrator/jobs, POST} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/orchestrator/jobs/:jobId, GET} route +1ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/orchestrator/jobs/:jobId/results, GET} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/orchestrator/jobs/:jobId/logs, GET} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RoutesResolver] PipelinesController {/api/v1}: +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/pipeline-templates, GET} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/pipeline-templates/:templateId, GET} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/pipeline-templates/:templateId/copy, POST} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/pipelines, GET} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/pipelines, POST} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/pipelines/:pipelineId, GET} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/pipelines/:pipelineId, PATCH} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/pipelines/:pipelineId/duplicate, POST} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/pipelines/:pipelineId, DELETE} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/pipelines/:pipelineId/modules, POST} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/pipelines/:pipelineId/modules/reorder, PATCH} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/pipelines/:pipelineId/modules/:moduleId/position, PATCH} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/pipelines/:pipelineId/connections, PATCH} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/pipelines/:pipelineId/connections/:moduleId/connect, POST} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/pipelines/:pipelineId/connections/:moduleId, DELETE} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/pipelines/:pipelineId/modules/:moduleId, DELETE} route +1ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/pipelines/:pipelineId/module-snapshots, GET} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/pipelines/:pipelineId/module-snapshots/:moduleId, GET} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/pipelines/:pipelineId/module-snapshots/:moduleId, PUT} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/pipelines/:pipelineId/modules/search/collection-jobs, POST} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RoutesResolver] DataSourcesController {/api/v1/data-sources}: +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/data-sources, GET} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/data-sources, POST} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/data-sources/:dataSourceId, GET} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/data-sources/:dataSourceId, PATCH} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/data-sources/:dataSourceId/linked-pipeline, PATCH} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/data-sources/:dataSourceId, DELETE} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RoutesResolver] ModulesCatalogController {/api/v1/modules}: +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/modules, GET} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/modules/domain, GET} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RoutesResolver] DatabaseController {/api/v1/database}: +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/database/health, GET} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RoutesResolver] AuthController {/api/v1/auth}: +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/auth/signup, POST} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/auth/login, POST} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/auth/google, POST} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/auth/refresh, POST} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/auth/logout, POST} route +1ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [RouterExplorer] Mapped {/api/v1/auth/me, GET} route +0ms
+[Nest] 69779  - 05/10/2026, 4:34:05 PM     LOG [NestApplication] Nest application successfully started +1ms
+Error: connect EPERM 127.0.0.1:5432 - Local (0.0.0.0:0)
+    at /Users/leejunhyeong/Desktop/univ/4-1/capstone/project/backend/node_modules/pg-pool/index.js:45:11
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async StoreService.persistCollectionJob (/Users/leejunhyeong/Desktop/univ/4-1/capstone/project/backend/src/store/store.service.ts:1259:5)
+    at async StoreService.createCollectionJob (/Users/leejunhyeong/Desktop/univ/4-1/capstone/project/backend/src/store/store.service.ts:692:5)
+    at async CollectionService.createJob (/Users/leejunhyeong/Desktop/univ/4-1/capstone/project/backend/src/modules/collection/collection.service.ts:29:17)
+    at async main (/Users/leejunhyeong/Desktop/univ/4-1/capstone/project/backend/src/scripts/collection-smoke.ts:380:17) {
+  errno: -1,
+  code: 'EPERM',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 5432
+}
