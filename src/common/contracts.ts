@@ -126,6 +126,9 @@ export type ExternalKnowledgeItem = {
   metadataCompleteness?: number;
   extractionMethod?: CollectionExtractionMethod;
   extractionReliability?: number;
+  domainMatchScore?: number;
+  medicalSignalsMatched?: string[];
+  reasonCodes?: string[];
 };
 
 export type ExternalDatasetItem = {
@@ -156,6 +159,9 @@ export type ExternalDatasetItem = {
   downloadMethod?: CollectionDownloadMethod;
   downloadHint?: string;
   downloadReference?: string;
+  domainMatchScore?: number;
+  medicalSignalsMatched?: string[];
+  reasonCodes?: string[];
 };
 
 export type SelectedExternalResourcesRecord = {

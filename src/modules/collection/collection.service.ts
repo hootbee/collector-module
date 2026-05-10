@@ -12,6 +12,10 @@ import { CollectionOrchestratorService } from './collection-orchestrator.service
 
 @Injectable()
 export class CollectionService {
+  private readonly enforceLlmPlanner = ['1', 'true', 'yes', 'on'].includes(
+    (process.env.COLLECTION_ENFORCE_LLM_PLANNER ?? 'false').trim().toLowerCase(),
+  );
+
   constructor(
     private readonly storeService: StoreService,
     private readonly orchestratorService: CollectionOrchestratorService,
@@ -84,6 +88,14 @@ export class CollectionService {
         mustInclude: input.mustInclude,
         mustAvoid: input.mustAvoid,
       });
+
+      if (this.enforceLlmPlanner) {
+        if (!orchestration.llmPlan || !orchestration.llmPlanRaw) {
+          throw new Error(
+            'LLM planner enforcement is enabled, but llmPlan/llmPlanRaw is missing.',
+          );
+        }
+      }
 
       await this.storeService.startCollectionJob(input.jobId, {
         stage: 'collecting',

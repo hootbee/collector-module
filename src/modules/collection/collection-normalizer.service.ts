@@ -13,6 +13,22 @@ import type {
 
 @Injectable()
 export class CollectionNormalizerService {
+  private readonly medicalSignals = [
+    'clinical',
+    'patient',
+    'cohort',
+    'visit',
+    'outcome',
+    'mortality',
+    'adverse',
+    'event',
+    'ehr',
+    'emr',
+    'icu',
+    'sepsis',
+    'readmission',
+  ];
+
   toRawKnowledgeHits(hits: KnowledgeDiscoveryHit[]): CollectedKnowledgeHit[] {
     return hits.map((hit) => ({
       id: hit.id,
@@ -126,6 +142,14 @@ export class CollectionNormalizerService {
     matchedKeywords?: string[],
     matchedReason?: string,
   ): ExternalKnowledgeItem {
+    const scoreContext = this.computeMedicalContext([
+      ...hit.matchedTerms,
+      ...(matchedKeywords ?? []),
+      ...hit.tags,
+      hit.title,
+      hit.text,
+    ]);
+
     return {
       id: hit.entry.id,
       title: hit.entry.title,
@@ -148,6 +172,9 @@ export class CollectionNormalizerService {
       metadataCompleteness: hit.metadataCompleteness,
       extractionMethod: hit.extractionMethod,
       extractionReliability: hit.extractionReliability,
+      domainMatchScore: scoreContext.score,
+      medicalSignalsMatched: scoreContext.signals,
+      reasonCodes: scoreContext.reasonCodes,
     };
   }
 
@@ -156,6 +183,14 @@ export class CollectionNormalizerService {
     matchedKeywords?: string[],
     matchedReason?: string,
   ): ExternalDatasetItem {
+    const scoreContext = this.computeMedicalContext([
+      ...hit.matchedTerms,
+      ...(matchedKeywords ?? []),
+      ...hit.tags,
+      hit.title,
+      hit.text,
+    ]);
+
     return {
       id: hit.entry.id,
       name: hit.entry.name,
@@ -186,6 +221,39 @@ export class CollectionNormalizerService {
       extractionMethod: hit.extractionMethod,
       extractionReliability: hit.extractionReliability,
       directDownloadAvailable: hit.directDownloadAvailable,
+      domainMatchScore: scoreContext.score,
+      medicalSignalsMatched: scoreContext.signals,
+      reasonCodes: scoreContext.reasonCodes,
+    };
+  }
+
+  private computeMedicalContext(values: string[]): {
+    score: number;
+    signals: string[];
+    reasonCodes: string[];
+  } {
+    const merged = values
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    const matched = this.medicalSignals.filter((signal) => merged.includes(signal));
+    const unique = [...new Set(matched)];
+    const score = Math.min(1, unique.length / 6);
+    const reasonCodes: string[] = [];
+    if (unique.length > 0) {
+      reasonCodes.push('medical_signal_match');
+    }
+    if (score >= 0.7) {
+      reasonCodes.push('medical_high_confidence');
+    } else if (score >= 0.4) {
+      reasonCodes.push('medical_medium_confidence');
+    } else {
+      reasonCodes.push('medical_low_confidence');
+    }
+    return {
+      score,
+      signals: unique,
+      reasonCodes,
     };
   }
 }
