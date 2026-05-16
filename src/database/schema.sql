@@ -61,6 +61,8 @@ create table if not exists pipelines (
   id text primary key,
   user_id text references users(id) on delete cascade,
   is_public boolean not null default false,
+  visibility_locked boolean not null default false,
+  linked_data_source_id text,
   kind text not null,
   domain_key text,
   domain_label text,
@@ -79,6 +81,11 @@ alter table pipelines add column if not exists is_public boolean;
 update pipelines set is_public = false where is_public is null;
 alter table pipelines alter column is_public set default false;
 alter table pipelines alter column is_public set not null;
+alter table pipelines add column if not exists visibility_locked boolean;
+update pipelines set visibility_locked = false where visibility_locked is null;
+alter table pipelines alter column visibility_locked set default false;
+alter table pipelines alter column visibility_locked set not null;
+alter table pipelines add column if not exists linked_data_source_id text;
 
 create table if not exists module_snapshots (
   id text primary key,

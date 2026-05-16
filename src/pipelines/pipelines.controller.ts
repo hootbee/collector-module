@@ -63,6 +63,7 @@ export class PipelinesController {
       autoNamed?: boolean;
       isPublic?: boolean;
       is_public?: boolean;
+      linkedDataSourceId?: string | null;
     },
   ) {
     return this.pipelinesService.createPipeline(await requireUserId(this.authService, request), {
@@ -94,6 +95,7 @@ export class PipelinesController {
       autoNamed?: boolean;
       isPublic?: boolean;
       is_public?: boolean;
+      linkedDataSourceId?: string | null;
     },
   ) {
     const actorUserId = await requireUserId(this.authService, request);

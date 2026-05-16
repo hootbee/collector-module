@@ -506,6 +506,8 @@ export type PipelineRecord = {
   id: string;
   userId: string | null;
   isPublic: boolean;
+  visibilityLocked: boolean;
+  linkedDataSourceId: string | null;
   kind: string;
   domainKey: string | null;
   domainLabel: string | null;

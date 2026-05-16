@@ -69,7 +69,10 @@ export class PipelinesService {
       moduleLayout: template.moduleLayout,
       highlight: template.highlight,
       autoNamed: false,
-      isPublic: this.parseOptionalBoolean(input.isPublic, 'isPublic') ?? false,
+      // MVP 정책: 공유 허브 복사본은 항상 private
+      isPublic: false,
+      visibilityLocked: true,
+      linkedDataSourceId: null,
     });
     return { pipeline };
   }
@@ -118,6 +121,7 @@ export class PipelinesService {
     highlight?: string | null;
     autoNamed?: boolean;
     isPublic?: boolean;
+    linkedDataSourceId?: string | null;
   }): Promise<PipelineResponse> {
     const title = input.title?.trim();
     if (!title) {
@@ -127,6 +131,10 @@ export class PipelinesService {
       throw new BadRequestException(`User ${actorUserId} was not found.`);
     }
     const moduleIds = this.cleanModuleIds(input.moduleIds);
+    const linkedDataSourceId = await this.assertLinkedDataSourceOwner(
+      actorUserId,
+      input.linkedDataSourceId,
+    );
     const connectedAfter = this.normalizeConnectedAfter(
       moduleIds,
       this.cleanModuleIds(input.connectedAfter),
@@ -144,6 +152,8 @@ export class PipelinesService {
       highlight: this.cleanOptional(input.highlight),
       autoNamed: Boolean(input.autoNamed),
       isPublic: this.parseOptionalBoolean(input.isPublic, 'isPublic') ?? false,
+      visibilityLocked: false,
+      linkedDataSourceId,
     });
     return { pipeline };
   }
@@ -160,6 +170,7 @@ export class PipelinesService {
       highlight?: string | null;
       autoNamed?: boolean;
       isPublic?: boolean;
+      linkedDataSourceId?: string | null;
     },
   ): Promise<PipelineResponse> {
     const currentPipeline = await this.loadPipeline(pipelineId, actorUserId);
@@ -178,7 +189,16 @@ export class PipelinesService {
     if (input.description !== undefined) patch.description = input.description?.trim() || '';
     if (input.highlight !== undefined) patch.highlight = this.cleanOptional(input.highlight);
     if (input.autoNamed !== undefined) patch.autoNamed = Boolean(input.autoNamed);
+    if (input.linkedDataSourceId !== undefined) {
+      patch.linkedDataSourceId = await this.assertLinkedDataSourceOwner(
+        actorUserId,
+        input.linkedDataSourceId,
+      );
+    }
     if (input.isPublic !== undefined) {
+      if (currentPipeline.visibilityLocked) {
+        throw new BadRequestException('공유 허브에서 복사한 파이프라인은 공개로 전환할 수 없습니다.');
+      }
       patch.isPublic = this.parseOptionalBoolean(input.isPublic, 'isPublic')!;
       this.logger.log(
         `pipeline visibility patch requested pipelineId=${pipelineId} actorUserId=${actorUserId} requested=${patch.isPublic} current=${currentPipeline.isPublic}`,
@@ -199,7 +219,7 @@ export class PipelinesService {
   async duplicatePipeline(pipelineId: string, actorUserId: string, input?: {
     title?: string;
   }): Promise<PipelineResponse> {
-    const source = await this.loadPipeline(pipelineId, actorUserId);
+    const source = await this.loadPipelineForDuplicate(pipelineId, actorUserId);
     const pipeline = await this.storeService.createPipeline({
       userId: actorUserId,
       kind: source.kind,
@@ -213,6 +233,8 @@ export class PipelinesService {
       highlight: source.highlight,
       autoNamed: false,
       isPublic: false,
+      visibilityLocked: source.userId !== actorUserId,
+      linkedDataSourceId: null,
     });
     return { pipeline };
   }
@@ -506,6 +528,36 @@ export class PipelinesService {
       throw new ForbiddenException('You do not have access to this pipeline.');
     }
     return pipeline;
+  }
+
+  private async loadPipelineForDuplicate(pipelineId: string, actorUserId: string): Promise<PipelineRecord> {
+    const pipeline = await this.storeService.getPipeline(pipelineId);
+    if (!pipeline) {
+      throw new NotFoundException(`Pipeline ${pipelineId} was not found.`);
+    }
+    if (pipeline.userId === actorUserId) {
+      return pipeline;
+    }
+    if (pipeline.isPublic === true) {
+      return pipeline;
+    }
+    throw new ForbiddenException('You do not have access to this pipeline.');
+  }
+
+  private async assertLinkedDataSourceOwner(
+    actorUserId: string,
+    linkedDataSourceId?: string | null,
+  ): Promise<string | null> {
+    const id = this.cleanOptional(linkedDataSourceId);
+    if (!id) return null;
+    const source = await this.storeService.getDataSource(id);
+    if (!source) {
+      throw new BadRequestException(`linkedDataSourceId ${id} was not found.`);
+    }
+    if (source.userId !== actorUserId) {
+      throw new ForbiddenException('You can only link your own data source.');
+    }
+    return id;
   }
 
   private findTemplate(templateId: string): SharedPipelineTemplate {
