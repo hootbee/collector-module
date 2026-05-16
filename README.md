@@ -76,6 +76,7 @@ COLLECTION_BROWSER_FALLBACK_ENABLED=true npm run collection:browser:smoke
 - `POST /api/v1/collection/jobs/:jobId/downloads`
 - `GET /api/v1/collection/downloads/:downloadJobId`
 - `GET /api/v1/collection/downloads/:downloadJobId/results`
+- `GET /api/v1/pipelines/public`
 
 ### 목록 조회 응답(Auth Required Signal)
 
@@ -97,6 +98,38 @@ COLLECTION_BROWSER_FALLBACK_ENABLED=true npm run collection:browser:smoke
   "message": "로그인이 필요한 기능입니다."
 }
 ```
+
+### Docker 코드 변경 자동 반영(개발용)
+
+운영용 `docker-compose.yml`은 그대로 두고, 개발 시에만 watch 오버레이를 함께 사용합니다.
+
+```bash
+cd backend
+docker compose -f docker-compose.yml -f docker-compose.watch.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.watch.yml watch
+```
+
+- `src/**`, `tsconfig*.json` 변경은 컨테이너로 sync
+- `src/**`, `tsconfig*.json` 변경은 `sync+restart`로 즉시 반영
+- `package.json`, `package-lock.json` 변경은 자동 rebuild
+- 앱 프로세스는 `npm run start:dev`로 동작
+
+### 파이프라인 공개/비공개(`isPublic`) 정책
+
+- `isPublic=false`(기본값): 소유자만 조회/수정/삭제 가능
+- `isPublic=true`: `GET /api/v1/pipelines/public` 목록에 노출
+- 공개 상태 토글은 소유자만 가능 (`PATCH /api/v1/pipelines/:pipelineId`)
+
+요청 필드:
+
+- `POST /api/v1/pipelines` -> `isPublic?: boolean` (미전송 시 `false`)
+- `POST /api/v1/pipeline-templates/:templateId/copy` -> `isPublic?: boolean` (미전송 시 `false`)
+- `PATCH /api/v1/pipelines/:pipelineId` -> `isPublic?: boolean` (미전송 시 기존값 유지)
+
+검증/권한:
+
+- `isPublic`이 boolean이 아니면 `400 Bad Request`
+- 비소유자의 공개 상태 변경 시 `403 Forbidden`
 
 ## Auth
 

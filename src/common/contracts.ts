@@ -505,6 +505,7 @@ export type PipelineModuleLayout = Record<string, unknown>;
 export type PipelineRecord = {
   id: string;
   userId: string | null;
+  isPublic: boolean;
   kind: string;
   domainKey: string | null;
   domainLabel: string | null;

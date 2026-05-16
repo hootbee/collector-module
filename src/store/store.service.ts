@@ -334,6 +334,7 @@ export class StoreService {
 
   async createPipeline(input: {
     userId?: string | null;
+    isPublic?: boolean;
     kind: string;
     domainKey?: string | null;
     domainLabel?: string | null;
@@ -349,6 +350,7 @@ export class StoreService {
     const pipeline: PipelineRecord = {
       id: `pipe-${randomUUID().replace(/-/g, '').slice(0, 12)}`,
       userId: input.userId ?? null,
+      isPublic: input.isPublic ?? false,
       kind: input.kind,
       domainKey: input.domainKey ?? null,
       domainLabel: input.domainLabel ?? null,
@@ -381,6 +383,18 @@ export class StoreService {
     }
     return [...this.pipelines.values()]
       .filter((pipeline) => !userId || pipeline.userId === userId)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+
+  async listPublicPipelines(): Promise<PipelineRecord[]> {
+    if (this.usePostgres()) {
+      const result = await this.databaseService.query<PipelineRow>(
+        'select * from pipelines where is_public = true order by updated_at desc limit 200',
+      );
+      return result.rows.map((row) => this.pipelineFromRow(row));
+    }
+    return [...this.pipelines.values()]
+      .filter((pipeline) => pipeline.isPublic)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
@@ -1166,10 +1180,10 @@ export class StoreService {
     }
     await this.databaseService.query(
       [
-        'insert into pipelines (id, user_id, kind, domain_key, domain_label, title, description, module_ids, connected_after, module_layout, highlight, auto_named, created_at, updated_at)',
-        'values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)',
+        'insert into pipelines (id, user_id, is_public, kind, domain_key, domain_label, title, description, module_ids, connected_after, module_layout, highlight, auto_named, created_at, updated_at)',
+        'values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)',
         'on conflict (id) do update set',
-        'user_id = excluded.user_id, kind = excluded.kind, domain_key = excluded.domain_key, domain_label = excluded.domain_label,',
+        'user_id = excluded.user_id, is_public = excluded.is_public, kind = excluded.kind, domain_key = excluded.domain_key, domain_label = excluded.domain_label,',
         'title = excluded.title, description = excluded.description, module_ids = excluded.module_ids,',
         'connected_after = excluded.connected_after, module_layout = excluded.module_layout,',
         'highlight = excluded.highlight, auto_named = excluded.auto_named, updated_at = excluded.updated_at',
@@ -1177,6 +1191,7 @@ export class StoreService {
       [
         pipeline.id,
         pipeline.userId,
+        pipeline.isPublic,
         pipeline.kind,
         pipeline.domainKey,
         pipeline.domainLabel,
@@ -1461,6 +1476,7 @@ export class StoreService {
     return {
       id: row.id,
       userId: row.user_id,
+      isPublic: row.is_public,
       kind: row.kind,
       domainKey: row.domain_key,
       domainLabel: row.domain_label,
@@ -1599,6 +1615,7 @@ type JobLogRow = {
 type PipelineRow = {
   id: string;
   user_id: string | null;
+  is_public: boolean;
   kind: string;
   domain_key: string | null;
   domain_label: string | null;

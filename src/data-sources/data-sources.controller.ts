@@ -51,6 +51,19 @@ export class DataSourcesController {
     );
   }
 
+  @Post(':dataSourceId/pipeline')
+  async createPipeline(
+    @Req() request: MinimalRequest,
+    @Param('dataSourceId') dataSourceId: string,
+    @Body() body: { title?: string; isPublic?: boolean },
+  ) {
+    return this.dataSourcesService.createPipelineFromDataSource(
+      dataSourceId,
+      await requireUserId(this.authService, request),
+      body,
+    );
+  }
+
   @Delete(':dataSourceId')
   async delete(@Req() request: MinimalRequest, @Param('dataSourceId') dataSourceId: string) {
     return this.dataSourcesService.delete(dataSourceId, await requireUserId(this.authService, request));

@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import type { DataSourceListResponse, DataSourceRecord, DataSourceResponse } from '../common/contracts';
+import type { DataSourceListResponse, DataSourceRecord, DataSourceResponse, PipelineResponse } from '../common/contracts';
 import { StoreService } from '../store/store.service';
 
 type DataSourceInput = {
@@ -130,6 +130,31 @@ export class DataSourcesService {
       throw new NotFoundException(`Data source ${dataSourceId} was not found.`);
     }
     return { status: 'ok' };
+  }
+
+  async createPipelineFromDataSource(
+    dataSourceId: string,
+    actorUserId: string,
+    input: { title?: string; isPublic?: boolean },
+  ): Promise<PipelineResponse> {
+    const dataSource = await this.load(dataSourceId, actorUserId);
+    const pipeline = await this.storeService.createPipeline({
+      userId: actorUserId,
+      kind: 'collection-workflow',
+      domainKey: 'generic-data-collection',
+      domainLabel: 'Generic Data Collection',
+      title: input.title?.trim() || `${dataSource.name} 파이프라인`,
+      description: `${dataSource.name} 데이터셋 기반으로 생성된 파이프라인입니다.`,
+      moduleIds: ['collection'],
+      connectedAfter: [],
+      moduleLayout: {
+        collection: { x: 120, y: 120 },
+      },
+      highlight: 'Collection module only. Analysis/diagnosis modules can be added later.',
+      autoNamed: false,
+      isPublic: Boolean(input.isPublic),
+    });
+    return { pipeline };
   }
 
   private async load(dataSourceId: string, actorUserId?: string | null): Promise<DataSourceRecord> {

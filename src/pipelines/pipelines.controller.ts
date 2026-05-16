@@ -1,10 +1,12 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Logger, Param, Patch, Post, Put, Req } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { requireUserId, resolveOptionalUserId, type MinimalRequest } from '../auth/auth-request';
 import { PipelinesService } from './pipelines.service';
 
 @Controller()
 export class PipelinesController {
+  private readonly logger = new Logger(PipelinesController.name);
+
   constructor(
     private readonly pipelinesService: PipelinesService,
     private readonly authService: AuthService,
@@ -24,13 +26,19 @@ export class PipelinesController {
   async copySharedTemplate(
     @Req() request: MinimalRequest,
     @Param('templateId') templateId: string,
-    @Body() body: { title?: string },
+    @Body() body: { title?: string; isPublic?: boolean; is_public?: boolean },
   ) {
     const userId = await requireUserId(this.authService, request);
     return this.pipelinesService.copySharedTemplate(templateId, {
       userId,
       title: body.title,
+      isPublic: body.isPublic ?? body.is_public,
     });
+  }
+
+  @Get('pipelines/public')
+  listPublicPipelines() {
+    return this.pipelinesService.listPublicPipelines();
   }
 
   @Get('pipelines')
@@ -53,9 +61,14 @@ export class PipelinesController {
       moduleLayout?: Record<string, unknown>;
       highlight?: string;
       autoNamed?: boolean;
+      isPublic?: boolean;
+      is_public?: boolean;
     },
   ) {
-    return this.pipelinesService.createPipeline(await requireUserId(this.authService, request), body);
+    return this.pipelinesService.createPipeline(await requireUserId(this.authService, request), {
+      ...body,
+      isPublic: body.isPublic ?? body.is_public,
+    });
   }
 
   @Get('pipelines/:pipelineId')
@@ -79,9 +92,19 @@ export class PipelinesController {
       description?: string;
       highlight?: string;
       autoNamed?: boolean;
+      isPublic?: boolean;
+      is_public?: boolean;
     },
   ) {
-    return this.pipelinesService.updatePipeline(pipelineId, await requireUserId(this.authService, request), body);
+    const actorUserId = await requireUserId(this.authService, request);
+    const normalizedIsPublic = body.isPublic ?? body.is_public;
+    this.logger.log(
+      `PATCH /pipelines/${pipelineId} actorUserId=${actorUserId} rawIsPublic=${String(body.isPublic)} rawIsPublicSnake=${String(body.is_public)} normalized=${String(normalizedIsPublic)}`,
+    );
+    return this.pipelinesService.updatePipeline(pipelineId, actorUserId, {
+      ...body,
+      isPublic: normalizedIsPublic,
+    });
   }
 
   @Post('pipelines/:pipelineId/duplicate')

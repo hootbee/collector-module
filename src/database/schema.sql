@@ -60,6 +60,7 @@ alter table data_sources alter column user_id drop not null;
 create table if not exists pipelines (
   id text primary key,
   user_id text references users(id) on delete cascade,
+  is_public boolean not null default false,
   kind text not null,
   domain_key text,
   domain_label text,
@@ -73,6 +74,11 @@ create table if not exists pipelines (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table pipelines add column if not exists is_public boolean;
+update pipelines set is_public = false where is_public is null;
+alter table pipelines alter column is_public set default false;
+alter table pipelines alter column is_public set not null;
 
 create table if not exists module_snapshots (
   id text primary key,
@@ -188,6 +194,7 @@ create index if not exists idx_local_accounts_user_id on local_accounts(user_id)
 create index if not exists idx_refresh_tokens_user_id on refresh_tokens(user_id);
 create index if not exists idx_data_sources_user_id on data_sources(user_id);
 create index if not exists idx_pipelines_user_id on pipelines(user_id);
+create index if not exists idx_pipelines_is_public_updated_at on pipelines(is_public, updated_at desc);
 create index if not exists idx_orchestrator_jobs_user_id on orchestrator_jobs(user_id);
 create index if not exists idx_collection_jobs_user_id on collection_jobs(user_id);
 create index if not exists idx_collection_results_job_id on collection_results(collection_job_id);
