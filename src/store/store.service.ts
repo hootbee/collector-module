@@ -334,6 +334,9 @@ export class StoreService {
 
   async createPipeline(input: {
     userId?: string | null;
+    isPublic?: boolean;
+    visibilityLocked?: boolean;
+    linkedDataSourceId?: string | null;
     kind: string;
     domainKey?: string | null;
     domainLabel?: string | null;
@@ -349,6 +352,9 @@ export class StoreService {
     const pipeline: PipelineRecord = {
       id: `pipe-${randomUUID().replace(/-/g, '').slice(0, 12)}`,
       userId: input.userId ?? null,
+      isPublic: input.isPublic ?? false,
+      visibilityLocked: input.visibilityLocked ?? false,
+      linkedDataSourceId: input.linkedDataSourceId ?? null,
       kind: input.kind,
       domainKey: input.domainKey ?? null,
       domainLabel: input.domainLabel ?? null,
@@ -381,6 +387,18 @@ export class StoreService {
     }
     return [...this.pipelines.values()]
       .filter((pipeline) => !userId || pipeline.userId === userId)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+
+  async listPublicPipelines(): Promise<PipelineRecord[]> {
+    if (this.usePostgres()) {
+      const result = await this.databaseService.query<PipelineRow>(
+        'select * from pipelines where is_public = true order by updated_at desc limit 200',
+      );
+      return result.rows.map((row) => this.pipelineFromRow(row));
+    }
+    return [...this.pipelines.values()]
+      .filter((pipeline) => pipeline.isPublic)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
@@ -567,6 +585,10 @@ export class StoreService {
 
   async deleteDataSource(dataSourceId: string): Promise<boolean> {
     if (this.usePostgres()) {
+      await this.databaseService.query(
+        'update pipelines set linked_data_source_id = null where linked_data_source_id = $1',
+        [dataSourceId],
+      );
       const result = await this.databaseService.query(
         'delete from data_sources where id = $1',
         [dataSourceId],
@@ -574,7 +596,18 @@ export class StoreService {
       this.dataSources.delete(dataSourceId);
       return (result.rowCount ?? 0) > 0;
     }
-    return this.dataSources.delete(dataSourceId);
+    const deleted = this.dataSources.delete(dataSourceId);
+    if (!deleted) return false;
+    this.pipelines.forEach((pipeline, pipelineId) => {
+      if (pipeline.linkedDataSourceId === dataSourceId) {
+        this.pipelines.set(pipelineId, {
+          ...pipeline,
+          linkedDataSourceId: null,
+          updatedAt: nowIso(),
+        });
+      }
+    });
+    return true;
   }
 
   async saveModuleSnapshot(input: {
@@ -1166,10 +1199,10 @@ export class StoreService {
     }
     await this.databaseService.query(
       [
-        'insert into pipelines (id, user_id, kind, domain_key, domain_label, title, description, module_ids, connected_after, module_layout, highlight, auto_named, created_at, updated_at)',
-        'values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)',
+        'insert into pipelines (id, user_id, is_public, visibility_locked, linked_data_source_id, kind, domain_key, domain_label, title, description, module_ids, connected_after, module_layout, highlight, auto_named, created_at, updated_at)',
+        'values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)',
         'on conflict (id) do update set',
-        'user_id = excluded.user_id, kind = excluded.kind, domain_key = excluded.domain_key, domain_label = excluded.domain_label,',
+        'user_id = excluded.user_id, is_public = excluded.is_public, visibility_locked = excluded.visibility_locked, linked_data_source_id = excluded.linked_data_source_id, kind = excluded.kind, domain_key = excluded.domain_key, domain_label = excluded.domain_label,',
         'title = excluded.title, description = excluded.description, module_ids = excluded.module_ids,',
         'connected_after = excluded.connected_after, module_layout = excluded.module_layout,',
         'highlight = excluded.highlight, auto_named = excluded.auto_named, updated_at = excluded.updated_at',
@@ -1177,6 +1210,9 @@ export class StoreService {
       [
         pipeline.id,
         pipeline.userId,
+        pipeline.isPublic,
+        pipeline.visibilityLocked,
+        pipeline.linkedDataSourceId,
         pipeline.kind,
         pipeline.domainKey,
         pipeline.domainLabel,
@@ -1461,6 +1497,9 @@ export class StoreService {
     return {
       id: row.id,
       userId: row.user_id,
+      isPublic: row.is_public,
+      visibilityLocked: row.visibility_locked,
+      linkedDataSourceId: row.linked_data_source_id,
       kind: row.kind,
       domainKey: row.domain_key,
       domainLabel: row.domain_label,
@@ -1599,6 +1638,9 @@ type JobLogRow = {
 type PipelineRow = {
   id: string;
   user_id: string | null;
+  is_public: boolean;
+  visibility_locked: boolean;
+  linked_data_source_id: string | null;
   kind: string;
   domain_key: string | null;
   domain_label: string | null;

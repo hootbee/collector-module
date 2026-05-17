@@ -1,0 +1,22 @@
+services:
+  workbench:
+    build:
+      target: build
+    environment:
+      NODE_ENV: development
+    command: npm run start:dev
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./src
+          target: /app/src
+        - action: sync+restart
+          path: ./tsconfig.json
+          target: /app/tsconfig.json
+        - action: sync+restart
+          path: ./tsconfig.build.json
+          target: /app/tsconfig.build.json
+        - action: rebuild
+          path: ./package.json
+        - action: rebuild
+          path: ./package-lock.json

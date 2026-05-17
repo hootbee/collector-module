@@ -1,0 +1,2 @@
+case_id,query,planner,sources,runs,completed_runs,failed_runs,empty_result_runs,avg_dataset_count,avg_knowledge_count,top10_relevance_rate,top10_noise_rate,top10_trusted_rate,jaccard_top10_mean,pass_fail,note
+P1-Q1-OFF,"icu mortality prediction imbalanced clinical tabular dataset",off,"seed-catalog,huggingface-datasets,openml-datasets,uci-datasets",3,3,0,0,0,0,0,0,0,0,PENDING,

@@ -28,6 +28,26 @@ async function loginAsSmokeUser(baseUrl: string): Promise<{ accessToken: string 
   });
 }
 
+async function loginAsSecondUser(baseUrl: string): Promise<{ accessToken: string }> {
+  const loginId = 'smoke-user-2';
+  const password = 'password1234';
+  const name = 'Smoke User 2';
+  try {
+    await requestJson(`${baseUrl}/api/v1/auth/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, loginId, password }),
+    });
+  } catch {
+    // already exists
+  }
+  return requestJson(`${baseUrl}/api/v1/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ loginId, password }),
+  });
+}
+
 async function main() {
   const app = await createApp();
   await app.listen(0, '127.0.0.1');
@@ -40,6 +60,7 @@ async function main() {
     }
 
     const auth = await loginAsSmokeUser(baseUrl);
+    const secondAuth = await loginAsSecondUser(baseUrl);
     const authHeaders = {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${auth.accessToken}`,
@@ -60,8 +81,40 @@ async function main() {
           domain: { x: 340, y: 100 },
           search: { x: 580, y: 100 },
         },
+        isPublic: false,
       }),
     });
+
+    const toggledPublic = await requestJson<{ pipeline: { id: string; isPublic: boolean } }>(
+      `${baseUrl}/api/v1/pipelines/${created.pipeline.id}`,
+      {
+        method: 'PATCH',
+        headers: authHeaders,
+        body: JSON.stringify({ isPublic: true }),
+      },
+    );
+    if (!toggledPublic.pipeline.isPublic) {
+      throw new Error('owner must be able to set isPublic=true');
+    }
+
+    const publicList = await requestJson<{ items: Array<{ id: string }> }>(
+      `${baseUrl}/api/v1/pipelines/public`,
+    );
+    if (!publicList.items.some((item) => item.id === created.pipeline.id)) {
+      throw new Error('public pipeline must appear in public list');
+    }
+
+    const forbiddenToggle = await fetch(`${baseUrl}/api/v1/pipelines/${created.pipeline.id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${secondAuth.accessToken}`,
+      },
+      body: JSON.stringify({ isPublic: false }),
+    });
+    if (forbiddenToggle.status !== 403) {
+      throw new Error(`non-owner toggle must return 403, got ${forbiddenToggle.status}`);
+    }
 
     const updated = await requestJson(
       `${baseUrl}/api/v1/pipelines/${created.pipeline.id}`,
@@ -142,11 +195,20 @@ async function main() {
       headers: { Authorization: `Bearer ${auth.accessToken}` },
     });
 
+    const publicListAfterDelete = await requestJson<{ items: Array<{ id: string }> }>(
+      `${baseUrl}/api/v1/pipelines/public`,
+    );
+    if (publicListAfterDelete.items.some((item) => item.id === created.pipeline.id)) {
+      throw new Error('deleted pipeline must not appear in public list');
+    }
+
     console.log(JSON.stringify({
       status: 'ok',
       baseUrl,
       unauthList,
       created,
+      toggledPublic,
+      publicList,
       updated,
       reordered,
       moved,
@@ -156,6 +218,7 @@ async function main() {
       duplicated,
       deleted,
       list,
+      publicListAfterDelete,
     }, null, 2));
   } finally {
     await app.close();

@@ -126,6 +126,11 @@ export type ExternalKnowledgeItem = {
   metadataCompleteness?: number;
   extractionMethod?: CollectionExtractionMethod;
   extractionReliability?: number;
+  domainMatchScore?: number;
+  medicalSignalsMatched?: string[];
+  reasonCodes?: string[];
+  nonMedicalPenaltyApplied?: boolean;
+  excludedByMedicalGate?: boolean;
 };
 
 export type ExternalDatasetItem = {
@@ -156,6 +161,11 @@ export type ExternalDatasetItem = {
   downloadMethod?: CollectionDownloadMethod;
   downloadHint?: string;
   downloadReference?: string;
+  domainMatchScore?: number;
+  medicalSignalsMatched?: string[];
+  reasonCodes?: string[];
+  nonMedicalPenaltyApplied?: boolean;
+  excludedByMedicalGate?: boolean;
 };
 
 export type SelectedExternalResourcesRecord = {
@@ -376,8 +386,16 @@ export type CollectionJobResultsResponse = {
   query: string;
   kind: CollectionKind;
   requestedSources: CollectionSourceId[];
-  status: DiscoveryJobStatus;
+  status: DiscoveryJobStatus | 'SUCCESS' | 'INSUFFICIENT' | 'FAILED';
+  jobStatus?: DiscoveryJobStatus;
   stage: string;
+  metrics?: {
+    candidateCount: number;
+    usableCount: number;
+    avgRelevanceScore: number;
+  };
+  insufficientReasons?: string[];
+  nextActionHint?: 'UPLOAD_OR_REGISTER_URL';
   datasetQueries: string[];
   knowledgeQueries: string[];
   mustInclude: string[];
@@ -495,6 +513,9 @@ export type PipelineModuleLayout = Record<string, unknown>;
 export type PipelineRecord = {
   id: string;
   userId: string | null;
+  isPublic: boolean;
+  visibilityLocked: boolean;
+  linkedDataSourceId: string | null;
   kind: string;
   domainKey: string | null;
   domainLabel: string | null;

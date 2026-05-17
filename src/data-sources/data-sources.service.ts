@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import type { DataSourceListResponse, DataSourceRecord, DataSourceResponse } from '../common/contracts';
+import type { DataSourceListResponse, DataSourceRecord, DataSourceResponse, PipelineResponse } from '../common/contracts';
 import { StoreService } from '../store/store.service';
 
 type DataSourceInput = {
@@ -110,9 +110,9 @@ export class DataSourcesService {
     actorUserId: string,
     linkedPipelineId?: string | null,
   ): Promise<DataSourceResponse> {
-    await this.load(dataSourceId, actorUserId);
+    const current = await this.load(dataSourceId, actorUserId);
     const cleanPipelineId = this.cleanOptional(linkedPipelineId);
-    await this.assertPipelineExists(cleanPipelineId);
+    await this.assertOwnedPipeline(cleanPipelineId, actorUserId);
     const dataSource = await this.storeService.updateDataSource(dataSourceId, {
       userId: actorUserId,
       linkedPipelineId: cleanPipelineId,
@@ -120,6 +120,7 @@ export class DataSourcesService {
     if (!dataSource) {
       throw new NotFoundException(`Data source ${dataSourceId} was not found.`);
     }
+    await this.syncPipelineDataLink(actorUserId, dataSourceId, current.linkedPipelineId, cleanPipelineId);
     return { dataSource };
   }
 
@@ -130,6 +131,71 @@ export class DataSourcesService {
       throw new NotFoundException(`Data source ${dataSourceId} was not found.`);
     }
     return { status: 'ok' };
+  }
+
+  async createPipelineFromDataSource(
+    dataSourceId: string,
+    actorUserId: string,
+    input: { title?: string; isPublic?: boolean },
+  ): Promise<PipelineResponse> {
+    const dataSource = await this.load(dataSourceId, actorUserId);
+    const pipeline = await this.storeService.createPipeline({
+      userId: actorUserId,
+      kind: 'collection-workflow',
+      domainKey: 'generic-data-collection',
+      domainLabel: 'Generic Data Collection',
+      title: input.title?.trim() || `${dataSource.name} 파이프라인`,
+      description: `${dataSource.name} 데이터셋 기반으로 생성된 파이프라인입니다.`,
+      moduleIds: ['collection'],
+      connectedAfter: [],
+      moduleLayout: {
+        collection: { x: 120, y: 120 },
+      },
+      highlight: 'Collection module only. Analysis/diagnosis modules can be added later.',
+      autoNamed: false,
+      isPublic: Boolean(input.isPublic),
+    });
+    return { pipeline };
+  }
+
+  async createFromUpload(
+    actorUserId: string,
+    input: { name?: string; source?: string; rowsLabel?: string | null; pipelineId?: string | null },
+  ) {
+    const created = await this.create(actorUserId, {
+      name: input.name?.trim() || '사용자 업로드 데이터',
+      source: input.source?.trim() || 'USER_UPLOAD',
+      rowsLabel: input.rowsLabel ?? null,
+      linkedPipelineId: input.pipelineId ?? null,
+    });
+    return {
+      dataSourceId: created.dataSource.id,
+      sourceType: 'USER_UPLOAD' as const,
+      linkedPipelineId: created.dataSource.linkedPipelineId,
+      dataSource: created.dataSource,
+    };
+  }
+
+  async createFromUrl(
+    actorUserId: string,
+    input: { url?: string; name?: string; rowsLabel?: string | null; pipelineId?: string | null },
+  ) {
+    const url = this.cleanOptional(input.url);
+    if (!url) {
+      throw new BadRequestException('url is required.');
+    }
+    const created = await this.create(actorUserId, {
+      name: input.name?.trim() || '사용자 URL 등록 데이터',
+      source: `USER_URL:${url}`,
+      rowsLabel: input.rowsLabel ?? null,
+      linkedPipelineId: input.pipelineId ?? null,
+    });
+    return {
+      dataSourceId: created.dataSource.id,
+      sourceType: 'USER_URL' as const,
+      linkedPipelineId: created.dataSource.linkedPipelineId,
+      dataSource: created.dataSource,
+    };
   }
 
   private async load(dataSourceId: string, actorUserId?: string | null): Promise<DataSourceRecord> {
@@ -149,6 +215,52 @@ export class DataSourcesService {
     }
     if (!await this.storeService.getPipeline(pipelineId)) {
       throw new BadRequestException(`Pipeline ${pipelineId} was not found.`);
+    }
+  }
+
+  private async assertOwnedPipeline(pipelineId: string | null, actorUserId: string): Promise<void> {
+    if (!pipelineId) return;
+    const pipeline = await this.storeService.getPipeline(pipelineId);
+    if (!pipeline) {
+      throw new BadRequestException(`Pipeline ${pipelineId} was not found.`);
+    }
+    if (pipeline.userId !== actorUserId) {
+      throw new ForbiddenException('You can only link your own pipeline.');
+    }
+  }
+
+  private async syncPipelineDataLink(
+    actorUserId: string,
+    dataSourceId: string,
+    previousPipelineId: string | null,
+    nextPipelineId: string | null,
+  ): Promise<void> {
+    const myPipelines = await this.storeService.listPipelines(actorUserId);
+    const tasks: Array<Promise<unknown>> = [];
+
+    // 기존 연결 해제
+    if (previousPipelineId && previousPipelineId !== nextPipelineId) {
+      const prev = myPipelines.find((p) => p.id === previousPipelineId);
+      if (prev?.linkedDataSourceId === dataSourceId) {
+        tasks.push(this.storeService.updatePipeline(previousPipelineId, { linkedDataSourceId: null }));
+      }
+    }
+
+    // 같은 데이터소스를 물고 있는 다른 파이프라인 연결 해제(1:1 보장)
+    for (const pipeline of myPipelines) {
+      if (pipeline.id === nextPipelineId) continue;
+      if (pipeline.linkedDataSourceId === dataSourceId) {
+        tasks.push(this.storeService.updatePipeline(pipeline.id, { linkedDataSourceId: null }));
+      }
+    }
+
+    // 신규 연결 반영
+    if (nextPipelineId) {
+      tasks.push(this.storeService.updatePipeline(nextPipelineId, { linkedDataSourceId: dataSourceId }));
+    }
+
+    if (tasks.length > 0) {
+      await Promise.all(tasks);
     }
   }
 

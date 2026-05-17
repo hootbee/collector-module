@@ -37,9 +37,36 @@ const stopwords = new Set([
   'from',
 ]);
 
+const medicalMustInclude = [
+  'clinical',
+  'patient',
+  'cohort',
+  'visit',
+  'outcome',
+  'mortality',
+  'adverse event',
+  'ehr',
+  'emr',
+];
+
+const medicalMustAvoid = [
+  'stock',
+  'ohlcv',
+  'fraud',
+  'authorship',
+  'essay',
+  'stylometry',
+  'predictive maintenance',
+];
+
 @Injectable()
 export class CollectionPlannerService {
+  private readonly forceMedicalMode = ['1', 'true', 'yes', 'on'].includes(
+    (process.env.COLLECTION_MEDICAL_MODE ?? 'false').trim().toLowerCase(),
+  );
+
   build(request: CollectionRequest): { context: DiscoveryContext; plan: DiscoveryPlan } {
+    const medicalMode = this.forceMedicalMode || this.looksMedicalQuery(request.query);
     const inferredTaskSignals = request.taskSignals?.length
       ? [...request.taskSignals]
       : request.llmPlan?.taskSignals?.length
@@ -59,11 +86,13 @@ export class CollectionPlannerService {
     const mustInclude = uniqueKeepOrder([
       ...(request.mustInclude ?? []).map((value) => value.trim()).filter(Boolean),
       ...(request.llmPlan?.mustInclude ?? []).map((value) => value.trim()).filter(Boolean),
+      ...(medicalMode ? medicalMustInclude : []),
       ...tokenize(request.query).slice(0, 8),
     ]);
     const mustAvoid = uniqueKeepOrder([
       ...(request.mustAvoid ?? []).map((value) => value.trim()).filter(Boolean),
       ...(request.llmPlan?.mustAvoid ?? []).map((value) => value.trim()).filter(Boolean),
+      ...(medicalMode ? medicalMustAvoid : []),
     ]);
 
     const canonicalDatasetQueries = uniqueKeepOrder(
@@ -76,6 +105,13 @@ export class CollectionPlannerService {
         `${request.query} paper`,
         `${compressedQuery} paper`,
         ...this.knowledgeFallbackQueries(request.query, inferredTaskSignals, inferredModalitySignals),
+        ...(medicalMode
+          ? [
+              `${compressedQuery} clinical dataset`,
+              `${compressedQuery} patient cohort`,
+              `${compressedQuery} adverse event`,
+            ]
+          : []),
       ]
         .map((value) => value.trim())
         .filter(Boolean),
@@ -110,6 +146,7 @@ export class CollectionPlannerService {
         `${compressedQuery} dataset`,
         `${compressedQuery} benchmark`,
         request.query,
+        ...(medicalMode ? [`${compressedQuery} clinical dataset`, `${compressedQuery} patient cohort`] : []),
         ...(request.llmPlan?.datasetSourceQueries?.serpapi ?? []),
       ]).slice(0, 8),
     };
@@ -124,6 +161,9 @@ export class CollectionPlannerService {
       crossref: uniqueKeepOrder([
         ...this.shortQueryVariants(compressedQuery).map((value) => `${value} paper`),
         `${compressedQuery} benchmark`,
+        ...(medicalMode
+          ? [`${compressedQuery} clinical trial`, `${compressedQuery} cohort study`, `${compressedQuery} ehr`]
+          : []),
         ...(request.llmPlan?.knowledgeSourceQueries?.crossref ?? []),
       ]).slice(0, 8),
     };
@@ -201,6 +241,9 @@ export class CollectionPlannerService {
   private inferTaskSignals(query: string): TaskSignal[] {
     const tokens = new Set(tokenize(query));
     const signals: TaskSignal[] = [];
+    if (this.looksMedicalQuery(query)) {
+      signals.push('classification');
+    }
     if (['classification', 'classify', 'spam', 'sentiment', 'authorship', 'generated'].some((token) => tokens.has(token))) {
       signals.push('classification');
     }
@@ -223,6 +266,9 @@ export class CollectionPlannerService {
   private inferModalitySignals(query: string): ModalitySignal[] {
     const tokens = new Set(tokenize(query));
     const signals: ModalitySignal[] = ['tabular'];
+    if (this.looksMedicalQuery(query)) {
+      signals.push('longitudinal');
+    }
     if (['text', 'document', 'corpus', 'prompt', 'content', 'article', 'essay', 'review', 'language'].some((token) => tokens.has(token))) {
       signals.push('text', 'document');
     }
@@ -294,5 +340,24 @@ export class CollectionPlannerService {
       return 'anomaly';
     }
     return 'classification';
+  }
+
+  private looksMedicalQuery(query: string): boolean {
+    const tokens = new Set(tokenize(query));
+    const markers = [
+      'clinical',
+      'patient',
+      'cohort',
+      'mortality',
+      'hospital',
+      'icu',
+      'ehr',
+      'emr',
+      'sepsis',
+      'adverse',
+      'readmission',
+      'biomarker',
+    ];
+    return markers.some((marker) => tokens.has(marker));
   }
 }

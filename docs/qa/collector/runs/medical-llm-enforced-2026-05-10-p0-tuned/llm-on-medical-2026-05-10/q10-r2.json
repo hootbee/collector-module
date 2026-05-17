@@ -1,0 +1,625 @@
+{
+  "jobId": "collection-dfabf9b7ffb0",
+  "query": "critical care deterioration prediction dataset",
+  "kind": "both",
+  "requestedSources": [
+    "seed-catalog"
+  ],
+  "status": "completed",
+  "stage": "completed",
+  "datasetQueries": [
+    "critical care deterioration prediction dataset",
+    "critical care deterioration prediction",
+    "time series forecasting",
+    "stock prediction",
+    "ohlcv",
+    "critical care deterioration prediction dataset tabular",
+    "clinical cohort EHR dataset for patient deterioration outcome",
+    "ICU mortality and adverse event longitudinal dataset",
+    "stock forecasting",
+    "critical care deterioration"
+  ],
+  "knowledgeQueries": [
+    "critical care deterioration prediction dataset paper",
+    "critical care deterioration prediction paper",
+    "critical care deterioration prediction overview",
+    "financial time series forecasting paper",
+    "critical care deterioration prediction clinical dataset",
+    "critical care deterioration prediction patient cohort",
+    "critical care deterioration prediction adverse event",
+    "critical care deterioration prediction paper cohort outcomes",
+    "clinical study patient deterioration risk factors mortality",
+    "EHR based deterioration prediction systematic review"
+  ],
+  "mustInclude": [
+    "clinical",
+    "patient",
+    "cohort",
+    "visit",
+    "outcome",
+    "mortality",
+    "adverse event",
+    "ehr",
+    "emr",
+    "critical",
+    "care",
+    "deterioration",
+    "prediction"
+  ],
+  "mustAvoid": [
+    "stock",
+    "ohlcv",
+    "fraud",
+    "authorship",
+    "essay",
+    "stylometry",
+    "predictive maintenance"
+  ],
+  "llmPlanRaw": "{\n  \"canonicalIntent\": \"Find clinical datasets and literature for predicting patient deterioration in critical care settings\",\n  \"taskSignals\": [\"regression\", \"time-series-forecasting\"],\n  \"modalitySignals\": [\"tabular\"],\n  \"mustInclude\": [\"clinical\", \"patient\", \"cohort\", \"visit\", \"outcome\", \"mortality\", \"adverse event\", \"ehr\", \"emr\", \"critical\", \"care\", \"deterioration\"],\n  \"mustAvoid\": [\"stock\", \"ohlcv\", \"fraud\", \"authorship\", \"essay\", \"stylometry\", \"predictive maintenance\"],\n  \"datasetSourceQueries\": {\n    \"seed-catalog\": [\n      \"critical care deterioration prediction dataset tabular\",\n      \"clinical cohort EHR dataset for patient deterioration outcome\",\n      \"ICU mortality and adverse event longitudinal dataset\"\n    ]\n  },\n  \"knowledgeSourceQueries\": {\n    \"seed-catalog\": [\n      \"critical care deterioration prediction paper cohort outcomes\",\n      \"clinical study patient deterioration risk factors mortality\",\n      \"EHR based deterioration prediction systematic review\"\n    ]\n  },\n  \"notes\": [\n    \"Focused on clinical, patient‑level data and outcomes, avoiding financial or authorship topics.\",\n    \"Queries are concise and tailored to seed-catalog which indexes both datasets and scholarly records.\"\n  ]\n}",
+  "llmPlan": {
+    "canonicalIntent": "Find clinical datasets and literature for predicting patient deterioration in critical care settings",
+    "taskSignals": [
+      "regression",
+      "time-series-forecasting"
+    ],
+    "modalitySignals": [
+      "tabular"
+    ],
+    "mustInclude": [
+      "clinical",
+      "patient",
+      "cohort",
+      "visit",
+      "outcome",
+      "mortality",
+      "adverse event",
+      "ehr",
+      "emr",
+      "critical",
+      "care",
+      "deterioration"
+    ],
+    "mustAvoid": [
+      "stock",
+      "ohlcv",
+      "fraud",
+      "authorship",
+      "essay",
+      "stylometry",
+      "predictive maintenance"
+    ],
+    "datasetSourceQueries": {
+      "seed-catalog": [
+        "critical care deterioration prediction dataset tabular",
+        "clinical cohort EHR dataset for patient deterioration outcome",
+        "ICU mortality and adverse event longitudinal dataset"
+      ]
+    },
+    "knowledgeSourceQueries": {
+      "seed-catalog": [
+        "critical care deterioration prediction paper cohort outcomes",
+        "clinical study patient deterioration risk factors mortality",
+        "EHR based deterioration prediction systematic review"
+      ]
+    },
+    "notes": [
+      "Focused on clinical, patient‑level data and outcomes, avoiding financial or authorship topics.",
+      "Queries are concise and tailored to seed-catalog which indexes both datasets and scholarly records."
+    ]
+  },
+  "connectorStatuses": [
+    {
+      "connector": "seed-catalog",
+      "status": "ok",
+      "count": 2,
+      "errors": []
+    }
+  ],
+  "routedHits": [
+    {
+      "sourceHitId": "kn-ai-text-detection-overview",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-authorship-methods",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-text-provenance",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-generated-text-bias",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-writing-assessment",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-market-forecasting-overview",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-technical-indicator-leakage",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-ich-e2a",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-faers-overview",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-biomarker-batch",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-fraud-threshold",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-predictive-maintenance",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-air-quality",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-public-policy",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "kn-missing-longitudinal",
+      "kind": "knowledge",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-hc3",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://huggingface.co/datasets",
+      "detectedHost": "huggingface.co",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-authorship-corpus",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://huggingface.co/datasets",
+      "detectedHost": "huggingface.co",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-generated-text-detection",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://huggingface.co/datasets",
+      "detectedHost": "huggingface.co",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-multilingual-text-classification",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://huggingface.co/datasets",
+      "detectedHost": "huggingface.co",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-writing-quality",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://huggingface.co/datasets",
+      "detectedHost": "huggingface.co",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-yahoo-ohlcv-history",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://finance.yahoo.com",
+      "detectedHost": "finance.yahoo.com",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-market-technical-indicators",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://huggingface.co/datasets",
+      "detectedHost": "huggingface.co",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-mimic-demo",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://physionet.org",
+      "detectedHost": "physionet.org",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-synthea",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://synthetichealth.github.io/synthea/",
+      "detectedHost": "synthetichealth.github.io",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-credit-card-fraud",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://www.kaggle.com",
+      "detectedHost": "kaggle.com",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-ieee-fraud",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://www.kaggle.com",
+      "detectedHost": "kaggle.com",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    },
+    {
+      "sourceHitId": "ds-nasa-turbofan",
+      "kind": "dataset",
+      "connector": "seed-catalog",
+      "layer": "structured",
+      "url": "https://www.nasa.gov",
+      "detectedHost": "nasa.gov",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "routedConnector": "seed-catalog",
+      "rerouted": false
+    }
+  ],
+  "fetchedDocuments": [],
+  "rawKnowledgeHits": [],
+  "rawDatasetHits": [
+    {
+      "id": "ds-mimic-demo",
+      "connector": "seed-catalog",
+      "sourceType": "seed",
+      "layer": "structured",
+      "sourcePriority": 0.7,
+      "sourceReliability": 0.7,
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "detectedHost": "physionet.org",
+      "routedConnector": "seed-catalog",
+      "metadataCompleteness": 0.8666666666666667,
+      "extractionMethod": "direct",
+      "extractionReliability": 0.7,
+      "title": "MIMIC III demo subset",
+      "text": "MIMIC III demo subset Clinical patient visit table with vitals, labs, and outcome context. PhysioNet Clinical ICU visit sample table (patient / visit)",
+      "tags": [
+        "clinical",
+        "patient",
+        "vital",
+        "lab",
+        "visit"
+      ],
+      "domainIds": [
+        "dom-medical"
+      ],
+      "taskSignals": [
+        "classification"
+      ],
+      "modalitySignals": [
+        "tabular",
+        "longitudinal"
+      ],
+      "modality": "table",
+      "negativeTags": [
+        "generated",
+        "authorship",
+        "prompt"
+      ],
+      "matchedQueries": [
+        "clinical cohort EHR dataset for patient deterioration outcome",
+        "ICU mortality and adverse event longitudinal dataset"
+      ],
+      "matchedTerms": [
+        "clinical",
+        "patient",
+        "visit",
+        "outcome"
+      ],
+      "provider": "PhysioNet",
+      "providerDetail": "Clinical ICU visit sample",
+      "sourceUrl": "https://physionet.org",
+      "retrievalHint": "Clinical visit benchmark with patient and lab signals."
+    },
+    {
+      "id": "ds-synthea",
+      "connector": "seed-catalog",
+      "sourceType": "seed",
+      "layer": "structured",
+      "sourcePriority": 0.7,
+      "sourceReliability": 0.7,
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "detectedHost": "synthetichealth.github.io",
+      "routedConnector": "seed-catalog",
+      "metadataCompleteness": 0.8666666666666667,
+      "extractionMethod": "direct",
+      "extractionReliability": 0.7,
+      "title": "Synthea synthetic cohort sample",
+      "text": "Synthea synthetic cohort sample Synthetic patient visit, medication, and laboratory records. Synthea Synthetic healthcare records longitudinal visit log",
+      "tags": [
+        "clinical",
+        "synthetic",
+        "visit",
+        "lab",
+        "cohort"
+      ],
+      "domainIds": [
+        "dom-medical"
+      ],
+      "taskSignals": [
+        "classification"
+      ],
+      "modalitySignals": [
+        "tabular",
+        "longitudinal"
+      ],
+      "modality": "table",
+      "negativeTags": [
+        "generated text",
+        "authorship"
+      ],
+      "matchedQueries": [
+        "clinical cohort EHR dataset for patient deterioration outcome",
+        "ICU mortality and adverse event longitudinal dataset"
+      ],
+      "matchedTerms": [
+        "clinical",
+        "patient",
+        "cohort",
+        "visit"
+      ],
+      "provider": "Synthea",
+      "providerDetail": "Synthetic healthcare records",
+      "sourceUrl": "https://synthetichealth.github.io/synthea/",
+      "retrievalHint": "Synthetic healthcare dataset with longitudinal visit structure."
+    }
+  ],
+  "knowledgeItems": [],
+  "datasetItems": [
+    {
+      "id": "ds-mimic-demo",
+      "name": "MIMIC III demo subset",
+      "provider": "PhysioNet",
+      "description": "Clinical patient visit table with vitals, labs, and outcome context.",
+      "rowsHint": "100 to 10000 rows depending on slice",
+      "modality": "table (patient / visit)",
+      "licenseHint": "Credential required for full dataset",
+      "matchedKeywords": [
+        "clinical",
+        "patient",
+        "visit",
+        "outcome",
+        "cohort",
+        "mortality",
+        "adverse",
+        "event"
+      ],
+      "sourceUrl": "https://physionet.org",
+      "providerDetail": "Clinical ICU visit sample",
+      "retrievalHint": "Clinical visit benchmark with patient and lab signals.",
+      "matchedReason": "layer=structured | classification=known",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "detectedHost": "physionet.org",
+      "routedConnector": "seed-catalog",
+      "metadataCompleteness": 0.8666666666666667,
+      "extractionMethod": "direct",
+      "extractionReliability": 0.7,
+      "domainMatchScore": 1,
+      "medicalSignalsMatched": [
+        "clinical",
+        "patient",
+        "cohort",
+        "visit",
+        "outcome",
+        "mortality",
+        "adverse",
+        "event",
+        "icu"
+      ],
+      "reasonCodes": [
+        "medical_signal_match",
+        "medical_high_confidence"
+      ],
+      "nonMedicalPenaltyApplied": false,
+      "excludedByMedicalGate": false
+    },
+    {
+      "id": "ds-synthea",
+      "name": "Synthea synthetic cohort sample",
+      "provider": "Synthea",
+      "description": "Synthetic patient visit, medication, and laboratory records.",
+      "rowsHint": "5000 to 50000 rows",
+      "modality": "longitudinal visit log",
+      "licenseHint": "Apache 2.0",
+      "matchedKeywords": [
+        "clinical",
+        "patient",
+        "cohort",
+        "visit",
+        "outcome",
+        "mortality",
+        "adverse",
+        "event"
+      ],
+      "sourceUrl": "https://synthetichealth.github.io/synthea/",
+      "providerDetail": "Synthetic healthcare records",
+      "retrievalHint": "Synthetic healthcare dataset with longitudinal visit structure.",
+      "matchedReason": "layer=structured | classification=known",
+      "layer": "structured",
+      "sourceClassification": "known",
+      "sourceConfidence": "medium",
+      "detectedHost": "synthetichealth.github.io",
+      "routedConnector": "seed-catalog",
+      "metadataCompleteness": 0.8666666666666667,
+      "extractionMethod": "direct",
+      "extractionReliability": 0.7,
+      "domainMatchScore": 1,
+      "medicalSignalsMatched": [
+        "clinical",
+        "patient",
+        "cohort",
+        "visit",
+        "outcome",
+        "mortality",
+        "adverse",
+        "event"
+      ],
+      "reasonCodes": [
+        "medical_signal_match",
+        "medical_high_confidence"
+      ],
+      "nonMedicalPenaltyApplied": false,
+      "excludedByMedicalGate": false
+    }
+  ]
+}

@@ -41,6 +41,8 @@ export type SearchHitBase = {
   matchedQueries: string[];
   matchedTerms: string[];
   llmRelevance?: number;
+  domainMatchScore?: number;
+  medicalSignalsMatched?: string[];
 };
 
 export type FetchedDocument = {

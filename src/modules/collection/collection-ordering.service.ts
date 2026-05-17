@@ -4,15 +4,58 @@ import { tokenize, uniqueKeepOrder } from '../../common/text';
 import type { DiscoveryPlan } from './types/collection-plan';
 import type {
   DatasetDiscoveryHit,
+  DiscoveryRankingDebug,
   DiscoveryRankingOutcome,
   KnowledgeDiscoveryHit,
   RankedCandidate,
 } from './types/collection-hit';
 
 type OrderableHit = DatasetDiscoveryHit | KnowledgeDiscoveryHit;
+type SourceProfile = 'medical-trust' | 'generic' | 'non-medical';
+
+type RankingConfig = {
+  medicalGateEnabled: boolean;
+  medicalMinSignalMatch: number;
+  medicalMinDomainScore: number;
+  nonMedicalPenaltyEnabled: boolean;
+  nonMedicalPenaltyWeight: number;
+  nonMedicalStrictExclude: boolean;
+  nonMedicalStrictTerms: string[];
+  weightMedicalSignal: number;
+  weightDomainMatch: number;
+  weightKeywordMatch: number;
+  weightTaskModalityMatch: number;
+  weightMetadataCompleteness: number;
+  weightBrowserPenalty: number;
+  weightSourceMedicalTrust: number;
+  weightSourceGeneric: number;
+  weightSourceNonMedical: number;
+};
 
 @Injectable()
 export class CollectionOrderingService {
+  private readonly config: RankingConfig = {
+    medicalGateEnabled: this.readBool('MEDICAL_GATE_ENABLED', true),
+    medicalMinSignalMatch: this.readNumber('MEDICAL_MIN_SIGNAL_MATCH', 2),
+    medicalMinDomainScore: this.readNumber('MEDICAL_MIN_DOMAIN_SCORE', 0.35),
+    nonMedicalPenaltyEnabled: this.readBool('NON_MEDICAL_PENALTY_ENABLED', true),
+    nonMedicalPenaltyWeight: this.readNumber('NON_MEDICAL_PENALTY_WEIGHT', -8),
+    nonMedicalStrictExclude: this.readBool('NON_MEDICAL_STRICT_EXCLUDE', true),
+    nonMedicalStrictTerms: this.readStringList(
+      'NON_MEDICAL_STRICT_TERMS',
+      'stock,ohlcv,fraud,authorship,essay,stylometry,predictive maintenance',
+    ),
+    weightMedicalSignal: this.readNumber('WEIGHT_MEDICAL_SIGNAL', 4),
+    weightDomainMatch: this.readNumber('WEIGHT_DOMAIN_MATCH', 5),
+    weightKeywordMatch: this.readNumber('WEIGHT_KEYWORD_MATCH', 1),
+    weightTaskModalityMatch: this.readNumber('WEIGHT_TASK_MODALITY_MATCH', 2),
+    weightMetadataCompleteness: this.readNumber('WEIGHT_METADATA_COMPLETENESS', 1),
+    weightBrowserPenalty: this.readNumber('WEIGHT_BROWSER_PENALTY', -2),
+    weightSourceMedicalTrust: this.readNumber('WEIGHT_SOURCE_MEDICAL_TRUST', 3),
+    weightSourceGeneric: this.readNumber('WEIGHT_SOURCE_GENERIC', 0.5),
+    weightSourceNonMedical: this.readNumber('WEIGHT_SOURCE_NON_MEDICAL', -3),
+  };
+
   orderKnowledgeHits(
     hits: KnowledgeDiscoveryHit[],
     plan: DiscoveryPlan,
@@ -34,7 +77,23 @@ export class CollectionOrderingService {
     plan: DiscoveryPlan,
     context: DiscoveryContext,
   ): DiscoveryRankingOutcome<T> {
-    const ranked = hits.map((hit) => this.rankHit(hit, plan, context));
+    const gateDebug: DiscoveryRankingDebug[] = [];
+    const gatedHits = hits.filter((hit) => {
+      const gate = this.evaluateMedicalGate(hit, context);
+      if (!gate.passed) {
+        gateDebug.push({
+          id: hit.id,
+          score: Number.NEGATIVE_INFINITY,
+          scoreBreakdown: {},
+          matchedKeywords: [],
+          matchedReason: `medical-gate:signals=${gate.signalCount},domain=${gate.domainScore.toFixed(3)}`,
+          filteredOutReason: 'excludedByMedicalGate',
+        });
+      }
+      return gate.passed;
+    });
+
+    const ranked = gatedHits.map((hit) => this.rankHit(hit, plan, context));
     ranked.sort((left, right) => {
       if (right.score !== left.score) {
         return right.score - left.score;
@@ -73,7 +132,7 @@ export class CollectionOrderingService {
 
     return {
       items: deduped,
-      debug,
+      debug: [...gateDebug, ...debug],
     };
   }
 
@@ -106,15 +165,17 @@ export class CollectionOrderingService {
     add('sourceReliability', sourceReliabilityScore);
 
     const metadataCompletenessScore = (hit.metadataCompleteness ?? 0) * 8;
-    add('metadataCompleteness', metadataCompletenessScore);
+    add('metadataCompleteness', metadataCompletenessScore * this.config.weightMetadataCompleteness);
 
-    const taskMatchScore = this.matchCount(hit.taskSignals, context.taskSignals) * 2;
+    const taskMatchScore =
+      (this.matchCount(hit.taskSignals, context.taskSignals) +
+        this.matchCount(hit.modalitySignals, context.modalitySignals)) *
+      this.config.weightTaskModalityMatch;
     add('taskMatch', taskMatchScore);
 
-    const modalityMatchScore = this.matchCount(hit.modalitySignals, context.modalitySignals) * 1.5;
-    add('modalityMatch', modalityMatchScore);
-
-    const keywordMatchScore = uniqueKeepOrder([...hit.matchedTerms, ...this.queryTokenMatches(hit, plan)]).length * 1.2;
+    const keywordMatchScore =
+      uniqueKeepOrder([...hit.matchedTerms, ...this.queryTokenMatches(hit, plan)]).length *
+      this.config.weightKeywordMatch;
     add('keywordMatch', keywordMatchScore);
 
     const mustAvoidPenalty = this.mustAvoidMatches(hit, plan.mustAvoid) * -4;
@@ -123,7 +184,22 @@ export class CollectionOrderingService {
     const llmRelevanceScore = (hit.llmRelevance ?? 0) * 2;
     add('llmRelevance', llmRelevanceScore);
 
-    const browserPenalty = hit.extractionMethod === 'browser' ? -2 : 0;
+    const medicalSignals = this.medicalSignalsForHit(hit);
+    const domainScoreRaw = this.domainScoreForHit(hit, medicalSignals);
+    const medicalSignalsScore = medicalSignals.length * this.config.weightMedicalSignal;
+    add('medicalSignalsMatched', medicalSignalsScore);
+
+    const domainMatchScore = domainScoreRaw * this.config.weightDomainMatch;
+    add('domainMatch', domainMatchScore);
+
+    const sourceProfileScore = this.sourceProfileScore(hit);
+    add('sourceProfile', sourceProfileScore);
+
+    const nonMedicalPenalty = this.nonMedicalPenalty(hit);
+    add('nonMedicalPenalty', nonMedicalPenalty);
+
+    const browserPenalty =
+      hit.extractionMethod === 'browser' ? this.config.weightBrowserPenalty : 0;
     add('browserPenalty', browserPenalty);
 
     const htmlPenalty = hit.extractionMethod === 'html' ? -0.5 : 0;
@@ -174,6 +250,111 @@ export class CollectionOrderingService {
   private matchCount(left: string[], right: string[]): number {
     const rightSet = new Set(right);
     return left.filter((item) => rightSet.has(item)).length;
+  }
+
+  private evaluateMedicalGate(hit: OrderableHit, context: DiscoveryContext): { passed: boolean; signalCount: number; domainScore: number } {
+    if (!this.config.medicalGateEnabled || !this.isMedicalContext(context)) {
+      const signals = this.medicalSignalsForHit(hit);
+      return { passed: true, signalCount: signals.length, domainScore: this.domainScoreForHit(hit, signals) };
+    }
+    const signals = this.medicalSignalsForHit(hit);
+    const signalCount = signals.length;
+    const domainScore = this.domainScoreForHit(hit, signals);
+    const passed =
+      signalCount >= this.config.medicalMinSignalMatch &&
+      domainScore >= this.config.medicalMinDomainScore;
+    return { passed, signalCount, domainScore };
+  }
+
+  private nonMedicalPenalty(hit: OrderableHit): number {
+    if (!this.config.nonMedicalPenaltyEnabled) {
+      return 0;
+    }
+    const text = `${hit.title} ${hit.text} ${hit.entry.sourceUrl ?? ''}`.toLowerCase();
+    const hasStrictTerm = this.config.nonMedicalStrictTerms.some((term) => text.includes(term.toLowerCase()));
+    if (hasStrictTerm && this.config.nonMedicalStrictExclude) {
+      return this.config.nonMedicalPenaltyWeight * 4;
+    }
+    return hasStrictTerm ? this.config.nonMedicalPenaltyWeight : 0;
+  }
+
+  private sourceProfileScore(hit: OrderableHit): number {
+    const profile = this.classifySourceProfile(hit);
+    if (profile === 'medical-trust') {
+      return this.config.weightSourceMedicalTrust;
+    }
+    if (profile === 'non-medical') {
+      return this.config.weightSourceNonMedical;
+    }
+    return this.config.weightSourceGeneric;
+  }
+
+  private classifySourceProfile(hit: OrderableHit): SourceProfile {
+    const text = `${hit.title} ${hit.text} ${hit.entry.sourceUrl ?? ''}`.toLowerCase();
+    const hasMedical =
+      this.medicalSignalsForHit(hit).length > 0 ||
+      /(clinical|patient|cohort|visit|outcome|mortality|ehr|emr|icu|sepsis|readmission)/.test(text);
+    if (hasMedical) {
+      return 'medical-trust';
+    }
+    if (/(stock|ohlcv|authorship|stylometry|fraud|predictive maintenance)/.test(text)) {
+      return 'non-medical';
+    }
+    return 'generic';
+  }
+
+  private isMedicalContext(context: DiscoveryContext): boolean {
+    const space = `${context.dataset.description} ${context.expandedKeywords.join(' ')} ${context.taskSignals.join(' ')} ${context.modalitySignals.join(' ')}`.toLowerCase();
+    return /(clinical|patient|cohort|visit|outcome|mortality|ehr|emr|icu|sepsis|readmission|medical|hospital)/.test(space);
+  }
+
+  private medicalSignalsForHit(hit: OrderableHit): string[] {
+    if (Array.isArray(hit.medicalSignalsMatched) && hit.medicalSignalsMatched.length > 0) {
+      return hit.medicalSignalsMatched;
+    }
+    const text = `${hit.title} ${hit.text} ${hit.entry.sourceUrl ?? ''}`.toLowerCase();
+    const dictionary = [
+      'clinical',
+      'patient',
+      'cohort',
+      'visit',
+      'outcome',
+      'mortality',
+      'ehr',
+      'emr',
+      'icu',
+      'sepsis',
+      'readmission',
+    ];
+    return dictionary.filter((token) => text.includes(token));
+  }
+
+  private domainScoreForHit(hit: OrderableHit, medicalSignals: string[]): number {
+    if (typeof hit.domainMatchScore === 'number' && Number.isFinite(hit.domainMatchScore)) {
+      return hit.domainMatchScore;
+    }
+    return Math.min(1, medicalSignals.length / 6);
+  }
+
+  private readBool(key: string, fallback: boolean): boolean {
+    const raw = process.env[key];
+    if (raw == null) return fallback;
+    return ['1', 'true', 'yes', 'on'].includes(raw.toLowerCase());
+  }
+
+  private readNumber(key: string, fallback: number): number {
+    const raw = process.env[key];
+    if (!raw) return fallback;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  private readStringList(key: string, fallbackCsv: string): string[] {
+    const raw = process.env[key] ?? fallbackCsv;
+    return raw
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean);
   }
 
   private duplicateKey(hit: OrderableHit): string {
