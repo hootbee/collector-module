@@ -386,8 +386,16 @@ export type CollectionJobResultsResponse = {
   query: string;
   kind: CollectionKind;
   requestedSources: CollectionSourceId[];
-  status: DiscoveryJobStatus;
+  status: DiscoveryJobStatus | 'SUCCESS' | 'INSUFFICIENT' | 'FAILED';
+  jobStatus?: DiscoveryJobStatus;
   stage: string;
+  metrics?: {
+    candidateCount: number;
+    usableCount: number;
+    avgRelevanceScore: number;
+  };
+  insufficientReasons?: string[];
+  nextActionHint?: 'UPLOAD_OR_REGISTER_URL';
   datasetQueries: string[];
   knowledgeQueries: string[];
   mustInclude: string[];

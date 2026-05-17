@@ -51,6 +51,41 @@ export class DataSourcesController {
     );
   }
 
+  @Patch(':dataSourceId/link-pipeline')
+  async linkPipeline(
+    @Req() request: MinimalRequest,
+    @Param('dataSourceId') dataSourceId: string,
+    @Body() body: { pipelineId?: string | null },
+  ) {
+    return this.dataSourcesService.updateLinkedPipeline(
+      dataSourceId,
+      await requireUserId(this.authService, request),
+      body.pipelineId ?? null,
+    );
+  }
+
+  @Post('upload')
+  async uploadAsDataSource(
+    @Req() request: MinimalRequest,
+    @Body() body: { name?: string; source?: string; rowsLabel?: string | null; pipelineId?: string | null },
+  ) {
+    return this.dataSourcesService.createFromUpload(
+      await requireUserId(this.authService, request),
+      body,
+    );
+  }
+
+  @Post('register-url')
+  async registerUrlAsDataSource(
+    @Req() request: MinimalRequest,
+    @Body() body: { url?: string; name?: string; rowsLabel?: string | null; pipelineId?: string | null },
+  ) {
+    return this.dataSourcesService.createFromUrl(
+      await requireUserId(this.authService, request),
+      body,
+    );
+  }
+
   @Post(':dataSourceId/pipeline')
   async createPipeline(
     @Req() request: MinimalRequest,

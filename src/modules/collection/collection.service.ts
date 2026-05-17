@@ -65,7 +65,41 @@ export class CollectionService {
     if (!results) {
       throw new NotFoundException(`Collection job ${jobId} was not found.`);
     }
-    return results;
+    const candidates = (results.datasetItems?.length ?? 0) + (results.knowledgeItems?.length ?? 0);
+    const allScores = [
+      ...(results.datasetItems ?? []).map((item) => Number(item.score)).filter((score) => Number.isFinite(score)),
+      ...(results.knowledgeItems ?? []).map((item) => Number(item.score)).filter((score) => Number.isFinite(score)),
+    ];
+    const avgRelevanceScore = allScores.length > 0
+      ? allScores.reduce((sum, score) => sum + score, 0) / allScores.length
+      : 0;
+    const usableCount =
+      (results.datasetItems ?? []).filter((item) => Number(item.score) >= 0.65).length
+      + (results.knowledgeItems ?? []).filter((item) => Number(item.score) >= 0.65).length;
+
+    const insufficientReasons: string[] = [];
+    if (candidates < 10) insufficientReasons.push('후보 수가 기준(10개)보다 적습니다.');
+    if (usableCount < 3) insufficientReasons.push('유효 후보 수가 기준(3개)보다 적습니다.');
+    if (avgRelevanceScore < 0.65) insufficientReasons.push('평균 관련도 점수가 기준(0.65)보다 낮습니다.');
+
+    const evaluatedStatus = results.jobStatus === 'failed' || results.status === 'failed'
+      ? 'FAILED'
+      : insufficientReasons.length > 0
+        ? 'INSUFFICIENT'
+        : 'SUCCESS';
+
+    return {
+      ...results,
+      jobStatus: (results as CollectionJobResultsResponse).jobStatus ?? (results as any).status,
+      status: evaluatedStatus,
+      metrics: {
+        candidateCount: candidates,
+        usableCount,
+        avgRelevanceScore,
+      },
+      insufficientReasons,
+      nextActionHint: 'UPLOAD_OR_REGISTER_URL',
+    };
   }
 
   private async runJob(input: {
