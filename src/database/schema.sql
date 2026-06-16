@@ -51,6 +51,8 @@ create table if not exists data_sources (
   data_modality text,
   row_unit text,
   sensitivity_note text,
+  target_column text,
+  target_label text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -199,6 +201,18 @@ create table if not exists job_logs (
 create index if not exists idx_oauth_accounts_user_id on oauth_accounts(user_id);
 create index if not exists idx_local_accounts_user_id on local_accounts(user_id);
 create index if not exists idx_refresh_tokens_user_id on refresh_tokens(user_id);
+create table if not exists data_source_files (
+  id text primary key,
+  data_source_id text not null references data_sources(id) on delete cascade,
+  file_name text not null,
+  content_type text,
+  bytes bigint not null default 0,
+  content bytea not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_data_source_files_data_source_id on data_source_files(data_source_id);
+
 create index if not exists idx_data_sources_user_id on data_sources(user_id);
 create index if not exists idx_pipelines_user_id on pipelines(user_id);
 create index if not exists idx_pipelines_is_public_updated_at on pipelines(is_public, updated_at desc);

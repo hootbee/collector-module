@@ -565,8 +565,19 @@ export type DataSourceRecord = {
   dataModality: string | null;
   rowUnit: string | null;
   sensitivityNote: string | null;
+  targetColumn: string | null;
+  targetLabel: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type DataSourceFileRecord = {
+  id: string;
+  dataSourceId: string;
+  fileName: string;
+  contentType: string | null;
+  bytes: number;
+  createdAt: string;
 };
 
 export type DataSourceResponse = {
@@ -598,7 +609,7 @@ export type ModuleSnapshotRecord = {
 };
 
 export type ModuleSnapshotResponse = {
-  moduleSnapshot: ModuleSnapshotRecord;
+  moduleSnapshot: ModuleSnapshotRecord | null;
 };
 
 export type ModuleSnapshotListResponse = {

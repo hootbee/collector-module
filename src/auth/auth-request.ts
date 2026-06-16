@@ -17,6 +17,26 @@ function bearerToken(request: MinimalRequest): string | null {
   return match?.[1]?.trim() || null;
 }
 
+export async function resolveUserIdFromAccessToken(
+  authService: AuthService,
+  accessToken?: string | null,
+): Promise<string | null> {
+  const token = accessToken?.trim();
+  if (!token) return null;
+  const user = await authService.getUserFromAccessToken(token);
+  return user.id;
+}
+
+export async function requireUserIdWithOptionalQueryToken(
+  authService: AuthService,
+  request: MinimalRequest,
+  queryAccessToken?: string | null,
+): Promise<string> {
+  const queryUserId = await resolveUserIdFromAccessToken(authService, queryAccessToken);
+  if (queryUserId) return queryUserId;
+  return requireUserId(authService, request);
+}
+
 export async function resolveOptionalUserId(authService: AuthService, request: MinimalRequest): Promise<string | null> {
   const token = bearerToken(request);
   if (!token) return null;

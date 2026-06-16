@@ -3,6 +3,7 @@ import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { CollectionController } from './modules/collection/collection.controller';
 import { DataSourcesController } from './data-sources/data-sources.controller';
+import { DataSourceAnalysisService } from './data-sources/data-source-analysis.service';
 import { DataSourcesService } from './data-sources/data-sources.service';
 import { DatabaseModule } from './database/database.module';
 import { CollectionConnectorRegistryService } from './modules/collection/connectors/connector-registry.service';
@@ -22,6 +23,7 @@ import { CollectionNormalizerService } from './modules/collection/collection-nor
 import { CollectionOrchestratorService } from './modules/collection/collection-orchestrator.service';
 import { CollectionPlannerService } from './modules/collection/collection-planner.service';
 import { CollectionDownloadService } from './modules/collection/collection-download.service';
+import { CollectionResourcePlanService } from './modules/collection/collection-resource-plan.service';
 import { CollectionService } from './modules/collection/collection.service';
 import { CollectionOrderingService } from './modules/collection/collection-ordering.service';
 import { CollectionSerpResultFilterService } from './modules/collection/collection-serp-result-filter.service';
@@ -33,6 +35,15 @@ import { ModulesCatalogController } from './modules-catalog/modules-catalog.cont
 import { ModulesCatalogService } from './modules-catalog/modules-catalog.service';
 import { PipelinesController } from './pipelines/pipelines.controller';
 import { PipelinesService } from './pipelines/pipelines.service';
+import { AddonRecommendationService } from './pipelines/addon-recommendation.service';
+import { PipelineStepExecutionService } from './pipelines/pipeline-step-execution.service';
+import { PipelineDiagnosisExecutionService } from './pipelines/pipeline-diagnosis-execution.service';
+import { PipelineDomainExecutionService } from './pipelines/pipeline-domain-execution.service';
+import { PipelineMatchingExecutionService } from './pipelines/pipeline-matching-execution.service';
+import { PipelineDataMergeService } from './pipelines/pipeline-data-merge.service';
+import { PipelineResultsExecutionService } from './pipelines/pipeline-results-execution.service';
+import { PipelineMissingImputationService } from './pipelines/pipeline-missing-imputation.service';
+import { PipelineSynthesisService } from './pipelines/pipeline-synthesis.service';
 import { StoreModule } from './store/store.module';
 
 @Module({
@@ -66,10 +77,21 @@ import { StoreModule } from './store/store.module';
     CollectionWebRoutingService,
     CollectionOrchestratorService,
     CollectionDownloadService,
+    CollectionResourcePlanService,
     CollectionService,
     OrchestratorModuleRegistryService,
     OrchestratorService,
     PipelinesService,
+    AddonRecommendationService,
+    PipelineStepExecutionService,
+    PipelineSynthesisService,
+    PipelineDiagnosisExecutionService,
+    PipelineDomainExecutionService,
+    PipelineMatchingExecutionService,
+    PipelineDataMergeService,
+    PipelineResultsExecutionService,
+    PipelineMissingImputationService,
+    DataSourceAnalysisService,
     DataSourcesService,
     ModulesCatalogService,
   ],

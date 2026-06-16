@@ -6,6 +6,7 @@ import type {
   TaskSignal,
 } from '../../common/contracts';
 import { CollectionDownloadService } from './collection-download.service';
+import { CollectionResourcePlanService } from './collection-resource-plan.service';
 import { CollectionService } from './collection.service';
 
 const collectionKinds: CollectionKind[] = ['dataset', 'knowledge', 'both'];
@@ -24,6 +25,7 @@ export class CollectionController {
   constructor(
     private readonly collectionService: CollectionService,
     private readonly collectionDownloadService: CollectionDownloadService,
+    private readonly collectionResourcePlanService: CollectionResourcePlanService,
   ) {}
 
   @Post('jobs')
@@ -122,5 +124,38 @@ export class CollectionController {
   @Get('downloads/:downloadJobId/results')
   getDownloadJobResults(@Param('downloadJobId') downloadJobId: string) {
     return this.collectionDownloadService.getResults(downloadJobId);
+  }
+
+  @Post('resource-plan/suggest')
+  suggestResourcePlan(
+    @Body()
+    body: {
+      datasetItems?: unknown[];
+      knowledgeItems?: unknown[];
+      domainForm?: Record<string, string>;
+      currentData?: {
+        fileName?: string;
+        columnNames?: string[];
+        featureColumns?: string[];
+        targetColumn?: string | null;
+        targetLabel?: string | null;
+        rowCount?: number | null;
+        diagnosisSummary?: string;
+        dataModality?: string;
+        rowUnit?: string;
+        mlTask?: string;
+        targetEvent?: string;
+        includeScope?: string;
+        excludeScope?: string;
+        classDistribution?: string;
+      };
+    },
+  ) {
+    return this.collectionResourcePlanService.suggestResourcePlan({
+      datasetItems: Array.isArray(body.datasetItems) ? body.datasetItems as never[] : [],
+      knowledgeItems: Array.isArray(body.knowledgeItems) ? body.knowledgeItems as never[] : [],
+      domainForm: body.domainForm ?? {},
+      currentData: body.currentData ?? {},
+    });
   }
 }

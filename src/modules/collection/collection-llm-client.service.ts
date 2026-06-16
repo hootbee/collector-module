@@ -47,11 +47,15 @@ export class CollectionLlmClientService {
     if (this.provider === 'openai') {
       return this.apiKey.length > 0;
     }
-    return (
-      ['openai-compatible', 'vllm', 'openai'].includes(this.provider) &&
-      this.baseUrl.length > 0 &&
-      this.model.length > 0
-    );
+    if (!['openai-compatible', 'vllm', 'openai'].includes(this.provider)) {
+      return false;
+    }
+    if (!this.baseUrl.length || !this.model.length) {
+      return false;
+    }
+    // 원격 OpenAI-compatible 엔드포인트는 Bearer 토큰이 필요한 경우가 많음
+    const isLocal = /localhost|127\.0\.0\.1/.test(this.baseUrl);
+    return isLocal || this.apiKey.length > 0;
   }
 
   getSettings() {

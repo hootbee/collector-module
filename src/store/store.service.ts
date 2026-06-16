@@ -13,6 +13,7 @@ import type {
   CollectionKind,
   CollectionLlmPlan,
   CollectionSourceId,
+  DataSourceFileRecord,
   DataSourceRecord,
   ModuleSnapshotRecord,
   OAuthAccountRecord,
@@ -36,6 +37,8 @@ export class StoreService {
   private readonly orchestratorLogs = new Map<string, OrchestratorJobLogRecord[]>();
   private readonly pipelines = new Map<string, PipelineRecord>();
   private readonly dataSources = new Map<string, DataSourceRecord>();
+  private readonly dataSourceFiles = new Map<string, DataSourceFileRecord[]>();
+  private readonly dataSourceFileBuffers = new Map<string, Buffer>();
   private readonly moduleSnapshots = new Map<string, ModuleSnapshotRecord>();
   private memoryLogId = 1;
   private readonly users = new Map<string, UserRecord>();
@@ -505,6 +508,8 @@ export class StoreService {
     dataModality?: string | null;
     rowUnit?: string | null;
     sensitivityNote?: string | null;
+    targetColumn?: string | null;
+    targetLabel?: string | null;
   }): Promise<DataSourceRecord> {
     const now = nowIso();
     const record: DataSourceRecord = {
@@ -521,6 +526,8 @@ export class StoreService {
       dataModality: input.dataModality ?? null,
       rowUnit: input.rowUnit ?? null,
       sensitivityNote: input.sensitivityNote ?? null,
+      targetColumn: input.targetColumn ?? null,
+      targetLabel: input.targetLabel ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -583,6 +590,104 @@ export class StoreService {
     return next;
   }
 
+  async createDataSourceFiles(
+    dataSourceId: string,
+    files: Array<{ fileName: string; contentType?: string | null; content: Buffer }>,
+  ): Promise<DataSourceFileRecord[]> {
+    if (!files.length) {
+      return [];
+    }
+    const now = nowIso();
+    const records: DataSourceFileRecord[] = files.map((file) => ({
+      id: `dsf-${randomUUID().replace(/-/g, '').slice(0, 12)}`,
+      dataSourceId,
+      fileName: file.fileName,
+      contentType: file.contentType ?? null,
+      bytes: file.content.length,
+      createdAt: now,
+    }));
+
+    if (this.usePostgres()) {
+      for (let i = 0; i < files.length; i += 1) {
+        const record = records[i];
+        const file = files[i];
+        await this.databaseService.query(
+          [
+            'insert into data_source_files (id, data_source_id, file_name, content_type, bytes, content, created_at)',
+            'values ($1, $2, $3, $4, $5, $6, $7)',
+            'on conflict (id) do update set',
+            'file_name = excluded.file_name, content_type = excluded.content_type, bytes = excluded.bytes, content = excluded.content',
+          ].join(' '),
+          [
+            record.id,
+            dataSourceId,
+            record.fileName,
+            record.contentType,
+            record.bytes,
+            file.content,
+            record.createdAt,
+          ],
+        );
+      }
+    } else {
+      this.dataSourceFiles.set(dataSourceId, records);
+      files.forEach((file, index) => {
+        this.dataSourceFileBuffers.set(records[index].id, file.content);
+      });
+    }
+
+    return records;
+  }
+
+  async getPrimaryDataSourceFileContent(
+    dataSourceId: string,
+  ): Promise<{ fileName: string; content: Buffer; contentType: string | null } | null> {
+    if (this.usePostgres()) {
+      const result = await this.databaseService.query<{
+        file_name: string;
+        content: Buffer;
+        content_type: string | null;
+      }>(
+        'select file_name, content, content_type from data_source_files where data_source_id = $1 order by created_at asc limit 1',
+        [dataSourceId],
+      );
+      const row = result.rows[0];
+      if (!row?.content?.length) {
+        return null;
+      }
+      return {
+        fileName: row.file_name,
+        content: row.content,
+        contentType: row.content_type,
+      };
+    }
+    const files = this.dataSourceFiles.get(dataSourceId) ?? [];
+    const first = files[0];
+    if (!first) {
+      return null;
+    }
+    const content = this.dataSourceFileBuffers.get(first.id);
+    if (!content?.length) {
+      return null;
+    }
+    return {
+      fileName: first.fileName,
+      content,
+      contentType: first.contentType,
+    };
+  }
+
+  async listDataSourceFiles(dataSourceId: string): Promise<DataSourceFileRecord[]> {
+    if (this.usePostgres()) {
+      const result = await this.databaseService.query<DataSourceFileRow>(
+        'select id, data_source_id, file_name, content_type, bytes, created_at from data_source_files where data_source_id = $1 order by created_at asc',
+        [dataSourceId],
+      );
+      return result.rows.map((row) => this.dataSourceFileFromRow(row));
+    }
+    return this.dataSourceFiles.get(dataSourceId) ?? [];
+  }
+
   async deleteDataSource(dataSourceId: string): Promise<boolean> {
     if (this.usePostgres()) {
       await this.databaseService.query(
@@ -594,9 +699,11 @@ export class StoreService {
         [dataSourceId],
       );
       this.dataSources.delete(dataSourceId);
+      this.dataSourceFiles.delete(dataSourceId);
       return (result.rowCount ?? 0) > 0;
     }
     const deleted = this.dataSources.delete(dataSourceId);
+    this.dataSourceFiles.delete(dataSourceId);
     if (!deleted) return false;
     this.pipelines.forEach((pipeline, pipelineId) => {
       if (pipeline.linkedDataSourceId === dataSourceId) {
@@ -1235,14 +1342,15 @@ export class StoreService {
     }
     await this.databaseService.query(
       [
-        'insert into data_sources (id, user_id, name, source, rows_label, linked_pipeline_id, domain_industry_context, domain_subject_scope, domain_regulation_scope, domain_stakeholder_notes, data_modality, row_unit, sensitivity_note, created_at, updated_at)',
-        'values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)',
+        'insert into data_sources (id, user_id, name, source, rows_label, linked_pipeline_id, domain_industry_context, domain_subject_scope, domain_regulation_scope, domain_stakeholder_notes, data_modality, row_unit, sensitivity_note, target_column, target_label, created_at, updated_at)',
+        'values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)',
         'on conflict (id) do update set',
         'user_id = excluded.user_id, name = excluded.name, source = excluded.source, rows_label = excluded.rows_label,',
         'linked_pipeline_id = excluded.linked_pipeline_id, domain_industry_context = excluded.domain_industry_context,',
         'domain_subject_scope = excluded.domain_subject_scope, domain_regulation_scope = excluded.domain_regulation_scope,',
         'domain_stakeholder_notes = excluded.domain_stakeholder_notes, data_modality = excluded.data_modality,',
-        'row_unit = excluded.row_unit, sensitivity_note = excluded.sensitivity_note, updated_at = excluded.updated_at',
+        'row_unit = excluded.row_unit, sensitivity_note = excluded.sensitivity_note,',
+        'target_column = excluded.target_column, target_label = excluded.target_label, updated_at = excluded.updated_at',
       ].join(' '),
       [
         record.id,
@@ -1258,6 +1366,8 @@ export class StoreService {
         record.dataModality,
         record.rowUnit,
         record.sensitivityNote,
+        record.targetColumn,
+        record.targetLabel,
         record.createdAt,
         record.updatedAt,
       ],
@@ -1515,6 +1625,17 @@ export class StoreService {
     };
   }
 
+  private dataSourceFileFromRow(row: DataSourceFileRow): DataSourceFileRecord {
+    return {
+      id: row.id,
+      dataSourceId: row.data_source_id,
+      fileName: row.file_name,
+      contentType: row.content_type,
+      bytes: Number(row.bytes),
+      createdAt: this.iso(row.created_at),
+    };
+  }
+
   private dataSourceFromRow(row: DataSourceRow): DataSourceRecord {
     return {
       id: row.id,
@@ -1530,6 +1651,8 @@ export class StoreService {
       dataModality: row.data_modality,
       rowUnit: row.row_unit,
       sensitivityNote: row.sensitivity_note,
+      targetColumn: row.target_column,
+      targetLabel: row.target_label,
       createdAt: this.iso(row.created_at),
       updatedAt: this.iso(row.updated_at),
     };
@@ -1655,6 +1778,15 @@ type PipelineRow = {
   updated_at: string | Date;
 };
 
+type DataSourceFileRow = {
+  id: string;
+  data_source_id: string;
+  file_name: string;
+  content_type: string | null;
+  bytes: number | string;
+  created_at: string | Date;
+};
+
 type DataSourceRow = {
   id: string;
   user_id: string | null;
@@ -1669,6 +1801,8 @@ type DataSourceRow = {
   data_modality: string | null;
   row_unit: string | null;
   sensitivity_note: string | null;
+  target_column: string | null;
+  target_label: string | null;
   created_at: string | Date;
   updated_at: string | Date;
 };

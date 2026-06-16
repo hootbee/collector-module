@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
+
+const UPLOAD_MAX_FILE_BYTES = 50 * 1024 * 1024;
+const UPLOAD_MAX_FILE_COUNT = 24;
+
+type UploadedFilePayload = {
+  originalname?: string;
+  mimetype?: string;
+  size?: number;
+  buffer?: Buffer;
+};
 import { AuthService } from '../auth/auth.service';
 import { requireUserId, resolveOptionalUserId, type MinimalRequest } from '../auth/auth-request';
 import { DataSourcesService } from './data-sources.service';
@@ -22,6 +33,14 @@ export class DataSourcesController {
     @Body() body: Record<string, unknown>,
   ) {
     return this.dataSourcesService.create(await requireUserId(this.authService, request), body);
+  }
+
+  @Get(':dataSourceId/preview')
+  async preview(@Req() request: MinimalRequest, @Param('dataSourceId') dataSourceId: string) {
+    return this.dataSourcesService.previewDataSource(
+      dataSourceId,
+      await requireUserId(this.authService, request),
+    );
   }
 
   @Get(':dataSourceId')
@@ -65,13 +84,52 @@ export class DataSourcesController {
   }
 
   @Post('upload')
+  @UseInterceptors(FilesInterceptor('files', UPLOAD_MAX_FILE_COUNT, {
+    limits: { fileSize: UPLOAD_MAX_FILE_BYTES },
+  }))
   async uploadAsDataSource(
     @Req() request: MinimalRequest,
-    @Body() body: { name?: string; source?: string; rowsLabel?: string | null; pipelineId?: string | null },
+    @UploadedFiles() files: UploadedFilePayload[] = [],
+    @Body() body: {
+      name?: string;
+      source?: string;
+      rowsLabel?: string | null;
+      pipelineId?: string | null;
+      domainIndustryContext?: string | null;
+      domainSubjectScope?: string | null;
+      domainRegulationScope?: string | null;
+      domainStakeholderNotes?: string | null;
+      dataModality?: string | null;
+      rowUnit?: string | null;
+      sensitivityNote?: string | null;
+      targetColumn?: string | null;
+      targetLabel?: string | null;
+    },
   ) {
     return this.dataSourcesService.createFromUpload(
       await requireUserId(this.authService, request),
-      body,
+      {
+        ...body,
+        attachedFiles: files
+          .filter((file) => file?.buffer && file.buffer.length > 0)
+          .map((file) => ({
+            name: String(file.originalname ?? '').trim(),
+            size: Number(file.size ?? 0),
+            contentType: file.mimetype ?? null,
+            buffer: file.buffer,
+          })),
+      },
+    );
+  }
+
+  @Post(':dataSourceId/analyze')
+  async analyzeUploadedDataSource(
+    @Req() request: MinimalRequest,
+    @Param('dataSourceId') dataSourceId: string,
+  ) {
+    return this.dataSourcesService.analyzeUploadedDataSource(
+      dataSourceId,
+      await requireUserId(this.authService, request),
     );
   }
 

@@ -110,17 +110,30 @@ export class CollectionNormalizerService {
   normalizeKnowledgeFromRanked(
     rankedHits: RankedCandidate<KnowledgeDiscoveryHit>[],
   ): ExternalKnowledgeItem[] {
-    return rankedHits.map((entry) =>
-      this.toKnowledgeItem(entry.hit, entry.matchedKeywords, entry.matchedReason),
-    );
+    return rankedHits.map((entry) => {
+      const item = this.toKnowledgeItem(entry.hit, entry.matchedKeywords, entry.matchedReason);
+      return {
+        ...item,
+        score: Math.max(this.normalizeRankScore(entry.score), item.domainMatchScore ?? 0),
+      };
+    });
   }
 
   normalizeDatasetsFromRanked(
     rankedHits: RankedCandidate<DatasetDiscoveryHit>[],
   ): ExternalDatasetItem[] {
-    return rankedHits.map((entry) =>
-      this.toDatasetItem(entry.hit, entry.matchedKeywords, entry.matchedReason),
-    );
+    return rankedHits.map((entry) => {
+      const item = this.toDatasetItem(entry.hit, entry.matchedKeywords, entry.matchedReason);
+      return {
+        ...item,
+        score: Math.max(this.normalizeRankScore(entry.score), item.domainMatchScore ?? 0),
+      };
+    });
+  }
+
+  private normalizeRankScore(rawScore: number): number {
+    if (!Number.isFinite(rawScore)) return 0;
+    return Math.max(0, Math.min(1, rawScore / 80));
   }
 
   private defaultMatchedReason(hit: KnowledgeDiscoveryHit | DatasetDiscoveryHit): string {

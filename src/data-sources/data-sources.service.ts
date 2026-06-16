@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { DataSourceListResponse, DataSourceRecord, DataSourceResponse, PipelineResponse } from '../common/contracts';
+import { DataSourceAnalysisService } from './data-source-analysis.service';
 import { StoreService } from '../store/store.service';
 
 type DataSourceInput = {
@@ -15,11 +16,16 @@ type DataSourceInput = {
   dataModality?: string | null;
   rowUnit?: string | null;
   sensitivityNote?: string | null;
+  targetColumn?: string | null;
+  targetLabel?: string | null;
 };
 
 @Injectable()
 export class DataSourcesService {
-  constructor(private readonly storeService: StoreService) {}
+  constructor(
+    private readonly storeService: StoreService,
+    private readonly analysisService: DataSourceAnalysisService,
+  ) {}
 
   async list(userId?: string | null): Promise<DataSourceListResponse> {
     if (!userId) {
@@ -68,6 +74,8 @@ export class DataSourcesService {
       dataModality: this.cleanOptional(input.dataModality),
       rowUnit: this.cleanOptional(input.rowUnit),
       sensitivityNote: this.cleanOptional(input.sensitivityNote),
+      targetColumn: this.cleanOptional(input.targetColumn),
+      targetLabel: this.cleanOptional(input.targetLabel),
     });
     return { dataSource };
   }
@@ -97,6 +105,8 @@ export class DataSourcesService {
     if (input.dataModality !== undefined) patch.dataModality = this.cleanOptional(input.dataModality);
     if (input.rowUnit !== undefined) patch.rowUnit = this.cleanOptional(input.rowUnit);
     if (input.sensitivityNote !== undefined) patch.sensitivityNote = this.cleanOptional(input.sensitivityNote);
+    if (input.targetColumn !== undefined) patch.targetColumn = this.cleanOptional(input.targetColumn);
+    if (input.targetLabel !== undefined) patch.targetLabel = this.cleanOptional(input.targetLabel);
 
     const dataSource = await this.storeService.updateDataSource(dataSourceId, patch);
     if (!dataSource) {
@@ -139,6 +149,16 @@ export class DataSourcesService {
     input: { title?: string; isPublic?: boolean },
   ): Promise<PipelineResponse> {
     const dataSource = await this.load(dataSourceId, actorUserId);
+    let highlight = `${dataSource.name} 데이터셋 기반 파이프라인입니다. 6단계 워크플로에서 부가 기능을 선택할 수 있습니다.`;
+    try {
+      const analysis = await this.analysisService.analyzeUploadedDataSource(dataSourceId);
+      if (analysis.diagnosisSummary?.trim()) {
+        highlight = analysis.diagnosisSummary.trim();
+      }
+    } catch {
+      // 업로드 파일이 없거나 LLM 분석 실패 시 기본 한국어 요약 유지
+    }
+
     const pipeline = await this.storeService.createPipeline({
       userId: actorUserId,
       kind: 'collection-workflow',
@@ -146,34 +166,147 @@ export class DataSourcesService {
       domainLabel: 'Generic Data Collection',
       title: input.title?.trim() || `${dataSource.name} 파이프라인`,
       description: `${dataSource.name} 데이터셋 기반으로 생성된 파이프라인입니다.`,
-      moduleIds: ['collection'],
-      connectedAfter: [],
+      moduleIds: ['diagnosis', 'domain', 'search', 'matching', 'synthesis', 'results'],
+      connectedAfter: ['diagnosis', 'domain', 'search', 'matching', 'synthesis'],
       moduleLayout: {
-        collection: { x: 120, y: 120 },
+        diagnosis: { x: 120, y: 120 },
+        domain: { x: 320, y: 120 },
+        search: { x: 520, y: 120 },
       },
-      highlight: 'Collection module only. Analysis/diagnosis modules can be added later.',
+      highlight,
+      linkedDataSourceId: dataSourceId,
       autoNamed: false,
       isPublic: Boolean(input.isPublic),
     });
-    return { pipeline };
+
+    await this.storeService.updateDataSource(dataSourceId, {
+      userId: actorUserId,
+      linkedPipelineId: pipeline.id,
+    });
+
+    return { pipeline: { ...pipeline, linkedDataSourceId: dataSourceId } };
   }
 
   async createFromUpload(
     actorUserId: string,
-    input: { name?: string; source?: string; rowsLabel?: string | null; pipelineId?: string | null },
+    input: {
+      name?: string;
+      source?: string;
+      rowsLabel?: string | null;
+      pipelineId?: string | null;
+      domainIndustryContext?: string | null;
+      domainSubjectScope?: string | null;
+      domainRegulationScope?: string | null;
+      domainStakeholderNotes?: string | null;
+      dataModality?: string | null;
+      rowUnit?: string | null;
+      sensitivityNote?: string | null;
+      targetColumn?: string | null;
+      targetLabel?: string | null;
+      attachedFiles?: Array<{
+        name?: string;
+        size?: number;
+        contentType?: string | null;
+        buffer?: Buffer;
+      }>;
+    },
   ) {
+    const uploadCandidates = Array.isArray(input.attachedFiles)
+      ? input.attachedFiles.filter((file) => typeof file?.name === 'string' && file.name.trim())
+      : [];
+    const filesToStore = uploadCandidates
+      .filter((file) => file.buffer && file.buffer.length > 0)
+      .map((file) => ({
+        fileName: String(file.name).trim(),
+        contentType: file.contentType ?? null,
+        content: file.buffer as Buffer,
+      }));
+    const fileSummary = uploadCandidates.length
+      ? `[업로드 파일] ${uploadCandidates
+        .map((file) => `${String(file.name).trim()} (${this.formatBytes(file.size)})`)
+        .join('; ')}`
+      : '';
+    const stakeholderBase = this.cleanOptional(input.domainStakeholderNotes);
+    const stakeholderNotes = [stakeholderBase, fileSummary].filter(Boolean).join('\n\n') || null;
+
     const created = await this.create(actorUserId, {
       name: input.name?.trim() || '사용자 업로드 데이터',
       source: input.source?.trim() || 'USER_UPLOAD',
       rowsLabel: input.rowsLabel ?? null,
       linkedPipelineId: input.pipelineId ?? null,
+      domainIndustryContext: input.domainIndustryContext ?? null,
+      domainSubjectScope: input.domainSubjectScope ?? null,
+      domainRegulationScope: input.domainRegulationScope ?? null,
+      domainStakeholderNotes: stakeholderNotes,
+      dataModality: input.dataModality ?? null,
+      rowUnit: input.rowUnit ?? null,
+      sensitivityNote: input.sensitivityNote ?? null,
+      targetColumn: input.targetColumn ?? null,
+      targetLabel: input.targetLabel ?? null,
     });
+
+    const storedFiles = await this.storeService.createDataSourceFiles(created.dataSource.id, filesToStore);
+    let analysis = null;
+    if (filesToStore.length > 0) {
+      try {
+        analysis = await this.analysisService.analyzeUploadedDataSource(created.dataSource.id);
+        const enriched = await this.update(created.dataSource.id, actorUserId, {
+          rowsLabel: analysis.rowsLabel ?? created.dataSource.rowsLabel,
+          domainIndustryContext: analysis.domainIndustryContext,
+          domainSubjectScope: analysis.domainSubjectScope,
+          domainRegulationScope: analysis.domainRegulationScope,
+          domainStakeholderNotes: [
+            analysis.domainStakeholderNotes,
+            analysis.diagnosisSummary ? `[LLM 진단] ${analysis.diagnosisSummary}` : '',
+          ].filter(Boolean).join('\n\n') || null,
+          dataModality: analysis.dataModality,
+          rowUnit: analysis.rowUnit,
+        });
+        created.dataSource = enriched.dataSource;
+      } catch {
+        // 업로드 자체는 성공. 분석 실패는 별도 analyze API로 재시도 가능.
+      }
+    }
+
     return {
       dataSourceId: created.dataSource.id,
       sourceType: 'USER_UPLOAD' as const,
       linkedPipelineId: created.dataSource.linkedPipelineId,
       dataSource: created.dataSource,
+      uploadedFiles: storedFiles.map((file) => ({
+        id: file.id,
+        name: file.fileName,
+        size: file.bytes,
+        contentType: file.contentType,
+      })),
+      analysis,
     };
+  }
+
+  async analyzeUploadedDataSource(dataSourceId: string, actorUserId: string) {
+    await this.load(dataSourceId, actorUserId);
+    const analysis = await this.analysisService.analyzeUploadedDataSource(dataSourceId);
+    const updated = await this.update(dataSourceId, actorUserId, {
+      rowsLabel: analysis.rowsLabel,
+      domainIndustryContext: analysis.domainIndustryContext,
+      domainSubjectScope: analysis.domainSubjectScope,
+      domainRegulationScope: analysis.domainRegulationScope,
+      domainStakeholderNotes: [
+        analysis.domainStakeholderNotes,
+        analysis.diagnosisSummary ? `[LLM 진단] ${analysis.diagnosisSummary}` : '',
+      ].filter(Boolean).join('\n\n') || null,
+      dataModality: analysis.dataModality,
+      rowUnit: analysis.rowUnit,
+    });
+    return {
+      analysis,
+      dataSource: updated.dataSource,
+    };
+  }
+
+  async previewDataSource(dataSourceId: string, actorUserId: string) {
+    await this.load(dataSourceId, actorUserId);
+    return this.analysisService.previewUploadedDataSource(dataSourceId);
   }
 
   async createFromUrl(
@@ -266,5 +399,13 @@ export class DataSourcesService {
 
   private cleanOptional(value: unknown): string | null {
     return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+  }
+
+  private formatBytes(value: unknown): string {
+    const bytes = Number(value);
+    if (!Number.isFinite(bytes) || bytes < 0) return '-';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 }

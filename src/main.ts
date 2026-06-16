@@ -1,6 +1,9 @@
 import 'dotenv/config';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
+
+const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT?.trim() || '10mb';
 
 function resolveAllowedOrigins(): string[] {
   const envOrigins = process.env.CORS_ALLOW_ORIGINS?.split(',')
@@ -16,14 +19,17 @@ function resolveAllowedOrigins(): string[] {
     'http://127.0.0.1:7634',
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'http://210.117.143.172:7634',
   ];
 }
 
 export async function createApp() {
   const { AppModule } = await import('./app.module');
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     cors: false,
   });
+  app.useBodyParser('json', { limit: JSON_BODY_LIMIT });
+  app.useBodyParser('urlencoded', { extended: true, limit: JSON_BODY_LIMIT });
 
   const allowedOrigins = new Set(resolveAllowedOrigins());
   app.enableCors({

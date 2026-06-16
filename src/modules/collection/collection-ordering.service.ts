@@ -36,8 +36,8 @@ type RankingConfig = {
 export class CollectionOrderingService {
   private readonly config: RankingConfig = {
     medicalGateEnabled: this.readBool('MEDICAL_GATE_ENABLED', true),
-    medicalMinSignalMatch: this.readNumber('MEDICAL_MIN_SIGNAL_MATCH', 2),
-    medicalMinDomainScore: this.readNumber('MEDICAL_MIN_DOMAIN_SCORE', 0.35),
+    medicalMinSignalMatch: this.readNumber('MEDICAL_MIN_SIGNAL_MATCH', 1),
+    medicalMinDomainScore: this.readNumber('MEDICAL_MIN_DOMAIN_SCORE', 0.1),
     nonMedicalPenaltyEnabled: this.readBool('NON_MEDICAL_PENALTY_ENABLED', true),
     nonMedicalPenaltyWeight: this.readNumber('NON_MEDICAL_PENALTY_WEIGHT', -8),
     nonMedicalStrictExclude: this.readBool('NON_MEDICAL_STRICT_EXCLUDE', true),
@@ -93,7 +93,9 @@ export class CollectionOrderingService {
       return gate.passed;
     });
 
-    const ranked = gatedHits.map((hit) => this.rankHit(hit, plan, context));
+    const eligibleHits = gatedHits.length > 0 ? gatedHits : hits;
+
+    const ranked = eligibleHits.map((hit) => this.rankHit(hit, plan, context));
     ranked.sort((left, right) => {
       if (right.score !== left.score) {
         return right.score - left.score;

@@ -29,6 +29,15 @@ const collectionSources: CollectionSourceId[] = [
 @Injectable()
 export class PipelinesService {
   private readonly logger = new Logger(PipelinesService.name);
+  private readonly snapshotUploadSessions = new Map<string, {
+    pipelineId: string;
+    moduleId: string;
+    userId: string;
+    summary: string;
+    totalChunks: number;
+    chunks: string[];
+    createdAt: number;
+  }>();
 
   constructor(
     private readonly storeService: StoreService,
@@ -196,13 +205,16 @@ export class PipelinesService {
       );
     }
     if (input.isPublic !== undefined) {
-      if (currentPipeline.visibilityLocked) {
+      const nextIsPublic = this.parseOptionalBoolean(input.isPublic, 'isPublic')!;
+      if (currentPipeline.visibilityLocked && nextIsPublic) {
         throw new BadRequestException('공유 허브에서 복사한 파이프라인은 공개로 전환할 수 없습니다.');
       }
-      patch.isPublic = this.parseOptionalBoolean(input.isPublic, 'isPublic')!;
-      this.logger.log(
-        `pipeline visibility patch requested pipelineId=${pipelineId} actorUserId=${actorUserId} requested=${patch.isPublic} current=${currentPipeline.isPublic}`,
-      );
+      if (!currentPipeline.visibilityLocked) {
+        patch.isPublic = nextIsPublic;
+        this.logger.log(
+          `pipeline visibility patch requested pipelineId=${pipelineId} actorUserId=${actorUserId} requested=${patch.isPublic} current=${currentPipeline.isPublic}`,
+        );
+      }
     }
     const pipeline = await this.storeService.updatePipeline(pipelineId, patch);
     if (!pipeline) {
@@ -404,10 +416,7 @@ export class PipelinesService {
       moduleId: moduleId.trim(),
       userId: this.cleanOptional(userId),
     });
-    if (!moduleSnapshot) {
-      throw new NotFoundException(`Module snapshot was not found for moduleId=${moduleId}.`);
-    }
-    return { moduleSnapshot };
+    return { moduleSnapshot: moduleSnapshot ?? null };
   }
 
   async saveModuleSnapshot(
@@ -434,6 +443,180 @@ export class PipelinesService {
           : null,
       }),
     };
+  }
+
+  async mergeModuleSnapshot(
+    pipelineId: string,
+    moduleId: string,
+    actorUserId: string,
+    input: {
+      data?: Record<string, unknown> | null;
+    },
+  ): Promise<ModuleSnapshotResponse> {
+    await this.loadPipeline(pipelineId, actorUserId);
+    const existing = await this.storeService.getModuleSnapshot({
+      pipelineId,
+      moduleId: moduleId.trim(),
+      userId: actorUserId,
+    });
+    const mergedData = this.mergeSnapshotData(
+      existing?.data && typeof existing.data === 'object' && !Array.isArray(existing.data)
+        ? existing.data
+        : {},
+      input.data && typeof input.data === 'object' && !Array.isArray(input.data)
+        ? input.data
+        : {},
+    );
+    return {
+      moduleSnapshot: await this.storeService.saveModuleSnapshot({
+        userId: actorUserId,
+        pipelineId,
+        moduleId: moduleId.trim(),
+        summary: existing?.summary ?? '',
+        data: mergedData,
+      }),
+    };
+  }
+
+  async uploadModuleSnapshotChunk(
+    pipelineId: string,
+    moduleId: string,
+    actorUserId: string,
+    input: {
+      uploadId?: string;
+      index?: number;
+      totalChunks?: number;
+      summary?: string;
+      chunk?: string;
+    },
+  ): Promise<{ status: 'ok'; received: number; totalChunks: number }> {
+    await this.loadPipeline(pipelineId, actorUserId);
+    const uploadId = input.uploadId?.trim();
+    const index = input.index;
+    const totalChunks = input.totalChunks;
+    const chunk = input.chunk ?? '';
+    if (!uploadId || typeof index !== 'number' || typeof totalChunks !== 'number' || totalChunks < 1) {
+      throw new BadRequestException('uploadId, index, totalChunks are required.');
+    }
+    if (index < 0 || index >= totalChunks) {
+      throw new BadRequestException('chunk index is out of range.');
+    }
+
+    const sessionKey = `${actorUserId}:${pipelineId}:${moduleId.trim()}:${uploadId}`;
+    let session = this.snapshotUploadSessions.get(sessionKey);
+    if (!session) {
+      session = {
+        pipelineId,
+        moduleId: moduleId.trim(),
+        userId: actorUserId,
+        summary: input.summary?.trim() || '',
+        totalChunks,
+        chunks: Array.from({ length: totalChunks }, () => ''),
+        createdAt: Date.now(),
+      };
+      this.snapshotUploadSessions.set(sessionKey, session);
+    } else if (session.totalChunks !== totalChunks) {
+      throw new BadRequestException('totalChunks does not match the active upload session.');
+    }
+
+    if (index === 0 && input.summary?.trim()) {
+      session.summary = input.summary.trim();
+    }
+    session.chunks[index] = chunk;
+    this.cleanupSnapshotUploadSessions();
+    return { status: 'ok', received: index + 1, totalChunks };
+  }
+
+  async completeModuleSnapshotUpload(
+    pipelineId: string,
+    moduleId: string,
+    actorUserId: string,
+    input: { uploadId?: string },
+  ): Promise<ModuleSnapshotResponse> {
+    await this.loadPipeline(pipelineId, actorUserId);
+    const uploadId = input.uploadId?.trim();
+    if (!uploadId) {
+      throw new BadRequestException('uploadId is required.');
+    }
+    const sessionKey = `${actorUserId}:${pipelineId}:${moduleId.trim()}:${uploadId}`;
+    const session = this.snapshotUploadSessions.get(sessionKey);
+    if (!session) {
+      throw new BadRequestException('upload session was not found or expired.');
+    }
+    if (session.chunks.some((part) => !part)) {
+      throw new BadRequestException('not all chunks were uploaded.');
+    }
+
+    let parsed: { summary?: string; data?: Record<string, unknown> | null };
+    try {
+      parsed = JSON.parse(session.chunks.join('')) as { summary?: string; data?: Record<string, unknown> | null };
+    } catch {
+      throw new BadRequestException('uploaded snapshot payload is not valid JSON.');
+    }
+
+    this.snapshotUploadSessions.delete(sessionKey);
+    return {
+      moduleSnapshot: await this.storeService.saveModuleSnapshot({
+        userId: actorUserId,
+        pipelineId,
+        moduleId: moduleId.trim(),
+        summary: parsed.summary?.trim() || session.summary || '',
+        data: parsed.data && typeof parsed.data === 'object' && !Array.isArray(parsed.data)
+          ? parsed.data
+          : null,
+      }),
+    };
+  }
+
+  private mergeSnapshotData(
+    base: Record<string, unknown>,
+    patch: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const result = { ...base };
+
+    if (Array.isArray(patch.subTaskResults)) {
+      const existing = Array.isArray(result.subTaskResults)
+        ? result.subTaskResults as Array<Record<string, unknown>>
+        : [];
+      const byId = new Map(existing.map((item) => [String(item.id ?? item.label ?? ''), item]));
+      for (const item of patch.subTaskResults) {
+        if (!item || typeof item !== 'object') continue;
+        const key = String((item as Record<string, unknown>).id ?? (item as Record<string, unknown>).label ?? '');
+        byId.set(key, item as Record<string, unknown>);
+      }
+      result.subTaskResults = [...byId.values()];
+    }
+
+    for (const [key, value] of Object.entries(patch)) {
+      if (key === 'subTaskResults') continue;
+      if (
+        value
+        && typeof value === 'object'
+        && !Array.isArray(value)
+        && result[key]
+        && typeof result[key] === 'object'
+        && !Array.isArray(result[key])
+      ) {
+        result[key] = this.mergeSnapshotData(
+          result[key] as Record<string, unknown>,
+          value as Record<string, unknown>,
+        );
+      } else {
+        result[key] = value;
+      }
+    }
+
+    return result;
+  }
+
+  private cleanupSnapshotUploadSessions(): void {
+    const ttlMs = 15 * 60 * 1000;
+    const now = Date.now();
+    for (const [key, session] of this.snapshotUploadSessions.entries()) {
+      if (now - session.createdAt > ttlMs) {
+        this.snapshotUploadSessions.delete(key);
+      }
+    }
   }
 
   async createSearchCollectionJob(

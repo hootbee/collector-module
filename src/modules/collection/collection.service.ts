@@ -4,11 +4,40 @@ import type {
   CollectionJobStatusResponse,
   CollectionKind,
   CollectionSourceId,
+  DiscoveryJobStatus,
   ModalitySignal,
   TaskSignal,
+  ExternalDatasetItem,
+  ExternalKnowledgeItem,
 } from '../../common/contracts';
 import { StoreService } from '../../store/store.service';
 import { CollectionOrchestratorService } from './collection-orchestrator.service';
+import { getCollectionQualityThresholds } from './collection-quality.config';
+
+function resolveItemRelevanceScore(item: { score?: number; domainMatchScore?: number }): number {
+  const primary = Number(item.score);
+  if (Number.isFinite(primary)) return primary;
+  const domain = Number(item.domainMatchScore);
+  if (Number.isFinite(domain)) return domain;
+  return 1;
+}
+
+function normalizeDiscoveryJobStatus(rawStatus: string): DiscoveryJobStatus {
+  const normalized = String(rawStatus || '').toLowerCase();
+  if (normalized === 'running') return 'running';
+  if (normalized === 'failed') return 'failed';
+  if (normalized === 'completed') return 'completed';
+  return 'queued';
+}
+
+function collectRelevanceScores(
+  datasetItems: ExternalDatasetItem[],
+  knowledgeItems: ExternalKnowledgeItem[],
+): number[] {
+  return [...datasetItems, ...knowledgeItems]
+    .map((item) => resolveItemRelevanceScore(item))
+    .filter((score) => Number.isFinite(score));
+}
 
 @Injectable()
 export class CollectionService {
@@ -65,38 +94,71 @@ export class CollectionService {
     if (!results) {
       throw new NotFoundException(`Collection job ${jobId} was not found.`);
     }
+    const jobStatusSnapshot = await this.storeService.toCollectionJobStatus(jobId);
+    const jobError = jobStatusSnapshot?.error ?? null;
+    const thresholds = getCollectionQualityThresholds();
     const candidates = (results.datasetItems?.length ?? 0) + (results.knowledgeItems?.length ?? 0);
-    const allScores = [
-      ...(results.datasetItems ?? []).map((item) => Number(item.score)).filter((score) => Number.isFinite(score)),
-      ...(results.knowledgeItems ?? []).map((item) => Number(item.score)).filter((score) => Number.isFinite(score)),
-    ];
+    const allScores = collectRelevanceScores(results.datasetItems ?? [], results.knowledgeItems ?? []);
     const avgRelevanceScore = allScores.length > 0
       ? allScores.reduce((sum, score) => sum + score, 0) / allScores.length
       : 0;
     const usableCount =
-      (results.datasetItems ?? []).filter((item) => Number(item.score) >= 0.65).length
-      + (results.knowledgeItems ?? []).filter((item) => Number(item.score) >= 0.65).length;
+      (results.datasetItems ?? []).filter((item) => resolveItemRelevanceScore(item) >= thresholds.minRelevanceScore).length
+      + (results.knowledgeItems ?? []).filter((item) => resolveItemRelevanceScore(item) >= thresholds.minRelevanceScore).length;
 
     const insufficientReasons: string[] = [];
-    if (candidates < 10) insufficientReasons.push('후보 수가 기준(10개)보다 적습니다.');
-    if (usableCount < 3) insufficientReasons.push('유효 후보 수가 기준(3개)보다 적습니다.');
-    if (avgRelevanceScore < 0.65) insufficientReasons.push('평균 관련도 점수가 기준(0.65)보다 낮습니다.');
+    const rawJobStatus = normalizeDiscoveryJobStatus(String(results.status || jobStatusSnapshot?.status || ''));
+    const metrics = {
+      candidateCount: candidates,
+      usableCount,
+      avgRelevanceScore,
+    };
 
-    const evaluatedStatus = results.jobStatus === 'failed' || results.status === 'failed'
-      ? 'FAILED'
+    if (rawJobStatus === 'running' || rawJobStatus === 'queued') {
+      return {
+        ...results,
+        status: 'running',
+        jobStatus: rawJobStatus,
+        metrics,
+        insufficientReasons: [],
+        nextActionHint: 'UPLOAD_OR_REGISTER_URL',
+      };
+    }
+
+    if (rawJobStatus === 'failed') {
+      return {
+        ...results,
+        status: 'FAILED',
+        jobStatus: 'failed',
+        metrics,
+        insufficientReasons: jobError ? [jobError] : [],
+        nextActionHint: 'UPLOAD_OR_REGISTER_URL',
+      };
+    }
+
+    if (candidates < thresholds.minCandidates) {
+      insufficientReasons.push(`후보 수가 기준(${thresholds.minCandidates}개)보다 적습니다.`);
+    }
+    if (usableCount < thresholds.minUsableCount) {
+      insufficientReasons.push(`유효 후보 수가 기준(${thresholds.minUsableCount}개)보다 적습니다.`);
+    }
+    if (allScores.length > 0 && avgRelevanceScore < thresholds.minRelevanceScore) {
+      insufficientReasons.push(`평균 관련도 점수가 기준(${thresholds.minRelevanceScore})보다 낮습니다.`);
+    }
+
+    const evaluatedStatus = candidates >= thresholds.minCandidates
+      && usableCount >= thresholds.minUsableCount
+      && (allScores.length === 0 || avgRelevanceScore >= thresholds.minRelevanceScore)
+      ? 'SUCCESS'
       : insufficientReasons.length > 0
         ? 'INSUFFICIENT'
         : 'SUCCESS';
 
     return {
       ...results,
-      jobStatus: (results as CollectionJobResultsResponse).jobStatus ?? (results as any).status,
+      jobStatus: 'completed',
       status: evaluatedStatus,
-      metrics: {
-        candidateCount: candidates,
-        usableCount,
-        avgRelevanceScore,
-      },
+      metrics,
       insufficientReasons,
       nextActionHint: 'UPLOAD_OR_REGISTER_URL',
     };
@@ -177,6 +239,13 @@ export class CollectionService {
           fetchedDocumentCount: orchestration.fetchedDocuments.length,
           genericKnowledgeCount: orchestration.rawKnowledgeHits.filter((hit) => hit.layer === 'generic').length,
           genericDatasetCount: orchestration.rawDatasetHits.filter((hit) => hit.layer === 'generic').length,
+        })}`,
+      );
+      console.info(
+        `[CollectionService] collection results ${JSON.stringify({
+          jobId: input.jobId,
+          datasetCount: orchestration.datasetItems.length,
+          knowledgeCount: orchestration.knowledgeItems.length,
         })}`,
       );
 
