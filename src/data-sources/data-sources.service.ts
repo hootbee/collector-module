@@ -309,6 +309,15 @@ export class DataSourcesService {
     return this.analysisService.previewUploadedDataSource(dataSourceId);
   }
 
+  async downloadDataSource(dataSourceId: string, actorUserId: string) {
+    await this.load(dataSourceId, actorUserId);
+    const file = await this.storeService.getPrimaryDataSourceFileContent(dataSourceId);
+    if (!file?.content?.length) {
+      throw new BadRequestException('다운로드할 업로드 파일이 없습니다. 파일을 포함해 다시 등록해주세요.');
+    }
+    return file;
+  }
+
   async createFromUrl(
     actorUserId: string,
     input: { url?: string; name?: string; rowsLabel?: string | null; pipelineId?: string | null },

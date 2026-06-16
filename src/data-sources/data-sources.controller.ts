@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, StreamableFile, UploadedFiles, UseInterceptors } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 
 const UPLOAD_MAX_FILE_BYTES = 50 * 1024 * 1024;
@@ -11,7 +11,7 @@ type UploadedFilePayload = {
   buffer?: Buffer;
 };
 import { AuthService } from '../auth/auth.service';
-import { requireUserId, resolveOptionalUserId, type MinimalRequest } from '../auth/auth-request';
+import { requireUserId, requireUserIdWithOptionalQueryToken, resolveOptionalUserId, type MinimalRequest } from '../auth/auth-request';
 import { DataSourcesService } from './data-sources.service';
 
 @Controller('data-sources')
@@ -41,6 +41,22 @@ export class DataSourcesController {
       dataSourceId,
       await requireUserId(this.authService, request),
     );
+  }
+
+  @Get(':dataSourceId/download')
+  async download(
+    @Req() request: MinimalRequest,
+    @Param('dataSourceId') dataSourceId: string,
+    @Query('access_token') accessToken?: string,
+  ): Promise<StreamableFile> {
+    const userId = await requireUserIdWithOptionalQueryToken(this.authService, request, accessToken);
+    const file = await this.dataSourcesService.downloadDataSource(dataSourceId, userId);
+    const contentType = file.contentType || 'application/octet-stream';
+    const encodedName = encodeURIComponent(file.fileName);
+    return new StreamableFile(file.content, {
+      type: contentType,
+      disposition: `attachment; filename="${file.fileName}"; filename*=UTF-8''${encodedName}`,
+    });
   }
 
   @Get(':dataSourceId')
